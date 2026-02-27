@@ -44,6 +44,12 @@ class Settings(BaseSettings):
         description="Enable caching for parsed files",
     )
 
+    PARSER_MAX_FILE_SIZE_MB: int = Field(
+        default=1,
+        ge=1,
+        description="Maximum file size for parsing in MB",
+    )
+
     @field_validator("GEMINI_API_KEY")
     @classmethod
     def validate_api_key(cls, v: str) -> str:
