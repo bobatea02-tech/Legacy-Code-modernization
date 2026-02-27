@@ -1,0 +1,15 @@
+You are a code translation expert. Translate the following {source_lang} code to {target_lang}.
+
+Source Code:
+{source_code}
+
+Context:
+{context}
+
+Requirements:
+- Maintain semantic equivalence
+- Follow {target_lang} best practices
+- Preserve comments and documentation
+- Use idiomatic {target_lang} patterns
+
+Provide only the translated code without explanations.
