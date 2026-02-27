@@ -7,10 +7,12 @@ import time
 from app.llm import (
     GeminiClient,
     LLMResponse,
+    estimate_tokens
+)
+from app.llm.exceptions import (
     APIKeyMissingError,
     TokenLimitExceededError,
-    GeminiRequestError,
-    estimate_tokens
+    GeminiRequestError
 )
 
 

@@ -1,6 +1,7 @@
 """Example usage of Gemini API client."""
 
-from app.llm import GeminiClient, estimate_tokens, TokenLimitExceededError, GeminiRequestError
+from app.llm import GeminiClient, estimate_tokens
+from app.llm.exceptions import TokenLimitExceededError, GeminiRequestError
 
 
 def demonstrate_basic_generation():
