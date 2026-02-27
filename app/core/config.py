@@ -50,6 +50,29 @@ class Settings(BaseSettings):
         description="Maximum file size for parsing in MB",
     )
 
+    LLM_MODEL_NAME: str = Field(
+        default="gemini-1.5-flash",
+        description="Gemini model name to use",
+    )
+
+    LLM_RETRY_COUNT: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Number of retries for LLM API calls",
+    )
+
+    LLM_RETRY_DELAY: float = Field(
+        default=1.0,
+        ge=0.1,
+        description="Initial retry delay in seconds (exponential backoff)",
+    )
+
+    TEMP_REPO_DIR: str = Field(
+        default=".temp_repos",
+        description="Temporary directory for repository processing",
+    )
+
     @field_validator("GEMINI_API_KEY")
     @classmethod
     def validate_api_key(cls, v: str) -> str:
