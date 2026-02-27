@@ -1,7 +1,7 @@
 """Schema definitions for context optimization."""
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Dict, Any
 
 
 @dataclass
@@ -30,7 +30,7 @@ class OptimizedContext:
     expansion_depth: int = 0
     """The depth used for dependency expansion."""
     
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "included_nodes": self.included_nodes,
