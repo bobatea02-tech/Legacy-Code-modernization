@@ -1,15 +1,16 @@
-You are a code translation expert. Translate the following {source_lang} code to {target_lang}.
-
-Source Code:
-{source_code}
-
-Context:
-{context}
+Translate the following {node_type} named '{node_name}' from legacy code to {target_language}.
 
 Requirements:
-- Maintain semantic equivalence
-- Follow {target_lang} best practices
-- Preserve comments and documentation
-- Use idiomatic {target_lang} patterns
+1. Preserve the original logic and behavior
+2. Follow {target_language} best practices and idioms
+3. Add type hints where appropriate
+4. Include docstrings for functions and classes
+5. Handle errors gracefully
+6. Maintain the same interface (function signatures, class methods)
 
-Provide only the translated code without explanations.
+Source Code:
+```
+{source_code}
+```
+
+Provide only the translated {target_language} code without explanations or markdown formatting.
