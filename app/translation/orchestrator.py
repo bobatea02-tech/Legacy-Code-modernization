@@ -451,42 +451,47 @@ class TranslationOrchestrator:
             )
             return template
         except FileNotFoundError:
-            logger.warning(
-                f"Prompt template file not found: {prompt_file}, using default",
+            error_msg = (
+                "Required prompt file 'prompts/translation_v1.txt' "
+                "not found. Externalized prompts are mandatory."
+            )
+            logger.error(
+                error_msg,
                 extra={"stage_name": "translation_orchestration"}
             )
-            # Fallback to embedded template if file not found
-            return self._get_default_prompt_template()
+            raise FileNotFoundError(error_msg)
         except Exception as e:
-            logger.warning(
-                f"Failed to load prompt template: {e}, using default",
+            error_msg = (
+                "Required prompt file 'prompts/translation_v1.txt' "
+                "not found. Externalized prompts are mandatory."
+            )
+            logger.error(
+                error_msg,
                 extra={"stage_name": "translation_orchestration", "error": str(e)}
             )
-            return self._get_default_prompt_template()
+            raise FileNotFoundError(error_msg)
     
-    def _get_default_prompt_template(self) -> str:
-        """Get default prompt template as fallback.
+    def _sanitize_code(self, code: str, max_length: int = 50000) -> str:
+        """Sanitize code to prevent token overflow.
         
+        Args:
+            code: Source code to sanitize
+            max_length: Maximum allowed length
+            
         Returns:
-            Default prompt template string
+            Sanitized code
         """
-        return """Translate the following {node_type} named '{node_name}' from legacy code to {target_language}.
-
-Requirements:
-1. Preserve the original logic and behavior
-2. Follow {target_language} best practices and idioms
-3. Add type hints where appropriate
-4. Include docstrings for functions and classes
-5. Handle errors gracefully
-6. Maintain the same interface (function signatures, class methods)
-
-Source Code:
-```
-{source_code}
-```
-
-Provide only the translated {target_language} code without explanations or markdown formatting.
-"""
+        if not code:
+            return ""
+        
+        if len(code) > max_length:
+            logger.warning(
+                "Source code truncated to prevent token overflow",
+                extra={"stage_name": "translation_orchestration"}
+            )
+            return code[:max_length]
+        
+        return code
     
     def _build_translation_prompt(
         self,
@@ -506,11 +511,14 @@ Provide only the translated {target_language} code without explanations or markd
         Returns:
             Formatted prompt string
         """
+        # Sanitize source code to prevent token overflow
+        sanitized_source = self._sanitize_code(source_code)
+        
         return self._translation_prompt_template.format(
             node_type=node_type,
             node_name=node_name,
             target_language=target_language,
-            source_code=source_code
+            source_code=sanitized_source
         )
     
     def get_translation_statistics(self, results: List[TranslationResult]) -> Dict[str, any]:
