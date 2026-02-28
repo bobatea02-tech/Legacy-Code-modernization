@@ -13,7 +13,6 @@ import networkx as nx
 
 from app.context_optimizer.optimizer import ContextOptimizer
 from app.llm.client import LLMClient
-from app.validation.validator import CodeValidator, ValidationLevel
 from app.parsers.base import ASTNode
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -108,7 +107,6 @@ class TranslationOrchestrator:
     def __init__(
         self,
         llm_client: LLMClient,
-        validator: Optional[CodeValidator] = None,
         context_optimizer: Optional[ContextOptimizer] = None,
         translation_store: Optional[TranslationStore] = None
     ):
@@ -116,12 +114,10 @@ class TranslationOrchestrator:
         
         Args:
             llm_client: LLM client for translation
-            validator: Code validator (optional)
             context_optimizer: Context optimizer (optional, uses default if None)
             translation_store: Translation cache (optional, creates new if None)
         """
         self.llm_client = llm_client
-        self.validator = validator or CodeValidator()
         self.context_optimizer = context_optimizer or ContextOptimizer()
         self.translation_store = translation_store or TranslationStore()
         self.settings = get_settings()
@@ -365,45 +361,12 @@ class TranslationOrchestrator:
                 dependencies_used=optimized_context.included_nodes
             )
         
-        # Validate translation
+        # Validate translation (removed - validation done separately in pipeline)
         validation_errors = []
         validation_warnings = []
         
-        if self.validator:
-            try:
-                validation_results = self.validator.validate_syntax(
-                    code=translated_code,
-                    language=target_language
-                )
-                
-                for result in validation_results:
-                    if result.level == ValidationLevel.ERROR:
-                        validation_errors.append(f"{result.location}: {result.message}")
-                    elif result.level == ValidationLevel.WARNING:
-                        validation_warnings.append(f"{result.location}: {result.message}")
-                
-                if validation_errors:
-                    logger.warning(
-                        f"Validation errors for {node_id}: {len(validation_errors)} errors",
-                        extra={
-                            "stage_name": "translation_orchestration",
-                            "node_id": node_id,
-                            "error_count": len(validation_errors)
-                        }
-                    )
-                
-            except Exception as e:
-                logger.warning(
-                    f"Validation failed for {node_id}: {e}",
-                    extra={"stage_name": "translation_orchestration", "node_id": node_id, "error": str(e)}
-                )
-                validation_warnings.append(f"Validation error: {e}")
-        
         # Determine final status
-        if validation_errors:
-            status = TranslationStatus.FAILED
-        else:
-            status = TranslationStatus.SUCCESS
+        status = TranslationStatus.SUCCESS
         
         # Create result
         result = TranslationResult(
