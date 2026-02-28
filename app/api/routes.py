@@ -40,6 +40,7 @@ from app.api.dependencies import (
     get_audit_engine,
     get_parser,
     get_storage,
+    get_pipeline_service,
     InMemoryStorage,
 )
 from app.ingestion.ingestor import RepositoryIngestor, IngestionError
@@ -188,12 +189,9 @@ async def upload_repo(
 async def translate(
     request: TranslateRequest,
     storage: InMemoryStorage = Depends(get_storage),
-    graph_builder: GraphBuilder = Depends(get_graph_builder),
-    translation_service: TranslationOrchestrator = Depends(get_translation_service),
-    validation_engine: ValidationEngine = Depends(get_validation_engine),
-    audit_engine: AuditEngine = Depends(get_audit_engine)
+    pipeline_service = Depends(get_pipeline_service)
 ) -> TranslateResponse:
-    """Execute full translation pipeline.
+    """Execute full translation pipeline using centralized PipelineService.
     
     Pipeline order:
     1. Parse AST from repository files
@@ -205,10 +203,7 @@ async def translate(
     Args:
         request: Translation request
         storage: Storage service
-        graph_builder: Graph builder service
-        translation_service: Translation orchestrator
-        validation_engine: Validation engine
-        audit_engine: Audit engine
+        pipeline_service: Centralized pipeline service
         
     Returns:
         TranslateResponse with translation results and validation
@@ -228,112 +223,70 @@ async def translate(
     repo_data = storage.get_repository(repo_id)
     file_metadata_list = repo_data["file_metadata"]
     
-    logger.info(f"Starting translation pipeline for {repo_id}")
+    # Get temporary path from first file (all files are in same temp dir)
+    if not file_metadata_list:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No files in repository"
+        )
     
+    # Create temporary ZIP from extracted files for pipeline
+    import tempfile
+    import zipfile
+    
+    temp_zip = None
     try:
-        # Phase 1: Parse files to AST
-        logger.info("Phase 1: Parsing files")
-        ast_nodes = []
-        ast_index = {}
+        # Create temporary ZIP file
+        temp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
+        temp_zip_path = temp_zip.name
+        temp_zip.close()
         
-        for file_meta in file_metadata_list:
-            try:
-                parser = get_parser(file_meta.language)
-                nodes = parser.parse_file(str(file_meta.path))
-                ast_nodes.extend(nodes)
-                
-                # Build index
-                for node in nodes:
-                    ast_index[node.id] = node
-                    
-            except Exception as e:
-                logger.warning(f"Failed to parse {file_meta.relative_path}: {e}")
-                continue
+        with zipfile.ZipFile(temp_zip_path, 'w') as zf:
+            for file_meta in file_metadata_list:
+                zf.write(file_meta.path, arcname=file_meta.relative_path)
         
-        if not ast_nodes:
+        logger.info(f"Starting translation pipeline for {repo_id}")
+        
+        # Execute centralized pipeline
+        pipeline_result = await pipeline_service.execute_full_pipeline(
+            repo_path=temp_zip_path,
+            source_language="java",  # TODO: detect from request
+            target_language=request.target_language.value,
+            repository_id=repo_id
+        )
+        
+        if not pipeline_result.success:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No parseable files found in repository"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Pipeline failed: {', '.join(pipeline_result.errors)}"
             )
         
-        logger.info(f"Parsed {len(ast_nodes)} AST nodes")
+        # Store results
+        storage.store_translations(repo_id, pipeline_result.translation_results)
+        storage.store_validations(repo_id, pipeline_result.validation_reports)
+        storage.store_documentation(repo_id, pipeline_result.documentation)
         
-        # Phase 2: Build dependency graph
-        logger.info("Phase 2: Building dependency graph")
-        dependency_graph = graph_builder.build_graph(ast_nodes)
+        if pipeline_result.audit_report:
+            storage.store_audit(repo_id, {
+                "overall_passed": pipeline_result.audit_report.overall_passed,
+                "total_checks": pipeline_result.audit_report.total_checks,
+                "passed_checks": pipeline_result.audit_report.passed_checks,
+                "failed_checks": pipeline_result.audit_report.failed_checks,
+                "execution_time_ms": pipeline_result.audit_report.execution_time_ms,
+                "check_results": pipeline_result.audit_report.check_results
+            })
         
-        # Store graph
-        graph_data = graph_builder.export_json()
-        storage.store_graph(repo_id, graph_data)
-        
-        logger.info(f"Built graph: {dependency_graph.number_of_nodes()} nodes, {dependency_graph.number_of_edges()} edges")
-        
-        # Phase 3: Translate code
-        logger.info("Phase 3: Translating code")
-        translation_results = await translation_service.translate_repository(
-            dependency_graph=dependency_graph,
-            ast_index=ast_index,
-            target_language=request.target_language.value
-        )
-        
-        storage.store_translations(repo_id, translation_results)
-        
-        logger.info(f"Translated {len(translation_results)} modules")
-        
-        # Phase 4: Validate translations
-        logger.info("Phase 4: Validating translations")
-        validation_reports = []
-        
-        for trans_result in translation_results:
-            if trans_result.translated_code:
-                # Get original AST node
-                original_node = ast_index.get(trans_result.module_name)
-                if original_node:
-                    validation_report = validation_engine.validate_translation(
-                        original_node=original_node,
-                        translated_code=trans_result.translated_code,
-                        dependency_graph=dependency_graph
-                    )
-                    validation_reports.append(validation_report)
-        
-        storage.store_validations(repo_id, validation_reports)
-        
-        logger.info(f"Validated {len(validation_reports)} translations")
-        
-        # Phase 5: Generate documentation (mock for now)
-        logger.info("Phase 5: Generating documentation")
-        documentation = {}
-        for trans_result in translation_results:
-            if trans_result.translated_code:
-                documentation[trans_result.module_name] = f"# {trans_result.module_name}\n\nGenerated documentation."
-        
-        storage.store_documentation(repo_id, documentation)
-        
-        # Phase 6: Run audit
-        logger.info("Phase 6: Running audit")
-        audit_report = audit_engine.run_audit(
-            validation_reports=validation_reports,
-            documentation=documentation
-        )
-        
-        storage.store_audit(repo_id, {
-            "overall_passed": audit_report.overall_passed,
-            "total_checks": audit_report.total_checks,
-            "passed_checks": audit_report.passed_checks,
-            "failed_checks": audit_report.failed_checks,
-            "execution_time_ms": audit_report.execution_time_ms,
-            "check_results": audit_report.check_results
-        })
-        
-        logger.info(f"Audit complete: {audit_report.passed_checks}/{audit_report.total_checks} passed")
+        # Store evaluation report
+        if pipeline_result.evaluation_report:
+            storage.store_evaluation(repo_id, pipeline_result.evaluation_report)
         
         # Build response
         modules_response = []
-        for i, trans_result in enumerate(translation_results):
+        for i, trans_result in enumerate(pipeline_result.translation_results):
             # Get validation for this module
             validation_summary = None
-            if i < len(validation_reports):
-                val_report = validation_reports[i]
+            if i < len(pipeline_result.validation_reports):
+                val_report = pipeline_result.validation_reports[i]
                 validation_summary = ValidationSummary(
                     structure_valid=val_report.structure_valid,
                     symbols_preserved=val_report.symbols_preserved,
@@ -355,12 +308,16 @@ async def translate(
             ))
         
         # Calculate statistics
-        statistics = translation_service.get_translation_statistics(translation_results)
-        statistics["audit_passed"] = audit_report.overall_passed
-        statistics["validation_passed"] = sum(
-            1 for r in validation_reports
-            if r.syntax_valid and r.structure_valid and r.symbols_preserved and r.dependencies_complete
-        )
+        statistics = {
+            "total_modules": len(pipeline_result.translation_results),
+            "successful": sum(1 for r in pipeline_result.translation_results if r.status.value == "success"),
+            "failed": sum(1 for r in pipeline_result.translation_results if r.status.value == "failed"),
+            "audit_passed": pipeline_result.audit_report.overall_passed if pipeline_result.audit_report else False,
+            "validation_passed": sum(
+                1 for r in pipeline_result.validation_reports
+                if r.syntax_valid and r.structure_valid and r.symbols_preserved and r.dependencies_complete
+            )
+        }
         
         return TranslateResponse(
             repository_id=repo_id,
@@ -378,6 +335,10 @@ async def translate(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Translation pipeline failed: {str(e)}"
         )
+    finally:
+        # Cleanup temporary ZIP
+        if temp_zip and Path(temp_zip_path).exists():
+            Path(temp_zip_path).unlink()
 
 
 # ============================================================================
@@ -556,11 +517,16 @@ async def get_report(
     
     # Get translations for statistics
     translations = storage.get_translations(repository_id) or []
+    
+    # Get evaluation report
+    evaluation = storage.get_evaluation(repository_id)
+    
     statistics = {
         "total_modules": len(translations),
         "total_validations": len(validations),
         "documentation_count": len(documentation_response),
-        "audit_passed": audit_data["overall_passed"] if audit_data else False
+        "audit_passed": audit_data["overall_passed"] if audit_data else False,
+        "evaluation": evaluation if evaluation else None
     }
     
     return ReportResponse(

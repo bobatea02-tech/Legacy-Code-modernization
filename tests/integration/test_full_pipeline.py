@@ -118,6 +118,8 @@ def test_multi_file_dependency_chain(
     - Translation preserves symbol calls
     - Validation confirms dependencies complete
     """
+    import asyncio
+    
     # Create test files
     file_a = temp_dir / "A.java"
     file_a.write_text("""
@@ -201,11 +203,11 @@ public class Helper {
     assert len(optimized_context.included_nodes) >= 1, "Should include target node"
     assert target_node_id in optimized_context.included_nodes, "Should include target"
     
-    # Get stub translation
-    translated_code = await mock_llm_client.generate(
+    # Get stub translation (run async function)
+    translated_code = asyncio.run(mock_llm_client.generate(
         prompt=f"Translate {calculate_total_node.name}",
         temperature=0.3
-    )
+    ))
     
     # Phase 4: Validate translation
     validation_report = validation_engine.validate_translation(

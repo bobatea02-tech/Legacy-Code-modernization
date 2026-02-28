@@ -16,6 +16,7 @@ from app.llm.gemini_client import GeminiClient
 from app.translation.orchestrator import TranslationOrchestrator, TranslationStore
 from app.validation import ValidationEngine
 from app.audit import AuditEngine
+from app.pipeline import PipelineService
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -87,6 +88,16 @@ def get_audit_engine() -> AuditEngine:
     return AuditEngine()
 
 
+@lru_cache
+def get_pipeline_service() -> PipelineService:
+    """Get centralized pipeline service.
+    
+    Returns:
+        PipelineService instance
+    """
+    return PipelineService()
+
+
 # ============================================================================
 # Translation Service (with dependencies)
 # ============================================================================
@@ -152,6 +163,7 @@ class InMemoryStorage:
         self._validations: dict = {}
         self._documentation: dict = {}
         self._audits: dict = {}
+        self._evaluations: dict = {}
     
     def store_repository(self, repo_id: str, data: dict) -> None:
         """Store repository data."""
@@ -200,6 +212,14 @@ class InMemoryStorage:
     def get_audit(self, repo_id: str) -> Optional[dict]:
         """Get audit results."""
         return self._audits.get(repo_id)
+    
+    def store_evaluation(self, repo_id: str, evaluation: dict) -> None:
+        """Store evaluation report."""
+        self._evaluations[repo_id] = evaluation
+    
+    def get_evaluation(self, repo_id: str) -> Optional[dict]:
+        """Get evaluation report."""
+        return self._evaluations.get(repo_id)
     
     def has_repository(self, repo_id: str) -> bool:
         """Check if repository exists."""
