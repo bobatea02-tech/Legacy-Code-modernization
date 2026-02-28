@@ -1,0 +1,43 @@
+{
+  "repo_name": "java_small",
+  "language": "java",
+  "file_count": 6,
+  "expected_dependencies": 12,
+  "entry_points": [
+    "src/App.java"
+  ],
+  "expected_token_estimate": 2800,
+  "complexity_level": "low",
+  "notes": "Minimal Java application demonstrating service pattern with interface, implementation, model, and utilities. Includes one unused class (UnusedHelper.java) for validation testing. Cross-file dependencies include: App->UserService, App->UserServiceImpl, App->User, App->LoggerUtil, UserServiceImpl->UserService, UserServiceImpl->User, UserServiceImpl->LoggerUtil. Total 6 files with clear dependency graph.",
+  "dependency_details": {
+    "App.java": [
+      "UserService",
+      "UserServiceImpl",
+      "User",
+      "LoggerUtil"
+    ],
+    "UserServiceImpl.java": [
+      "UserService",
+      "User",
+      "LoggerUtil"
+    ],
+    "UserService.java": [
+      "User"
+    ],
+    "User.java": [],
+    "LoggerUtil.java": [],
+    "UnusedHelper.java": []
+  },
+  "validation_targets": {
+    "unused_classes": [
+      "src/util/UnusedHelper.java"
+    ],
+    "interface_implementations": [
+      {
+        "interface": "UserService",
+        "implementation": "UserServiceImpl"
+      }
+    ],
+    "circular_dependencies": false
+  }
+}

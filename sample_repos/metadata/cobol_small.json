@@ -1,0 +1,63 @@
+{
+  "repo_name": "cobol_small",
+  "language": "cobol",
+  "file_count": 5,
+  "expected_dependencies": 8,
+  "entry_points": [
+    "main.cbl"
+  ],
+  "expected_token_estimate": 3200,
+  "complexity_level": "low",
+  "notes": "Legacy COBOL payment processing system with cross-program calls and shared copybook. Demonstrates CALL statements, COPY statements, and data passing between programs. Includes nested IF anti-pattern in validation.cbl for optimization testing. One unused module (unused_module.cbl) for validation testing.",
+  "dependency_details": {
+    "main.cbl": [
+      "common_data.cpy",
+      "VALIDATION",
+      "PAYMENT"
+    ],
+    "validation.cbl": [
+      "common_data.cpy"
+    ],
+    "payment.cbl": [
+      "common_data.cpy"
+    ],
+    "unused_module.cbl": [],
+    "copybooks/common_data.cpy": []
+  },
+  "validation_targets": {
+    "unused_modules": [
+      "unused_module.cbl"
+    ],
+    "call_statements": [
+      {
+        "caller": "main.cbl",
+        "callee": "VALIDATION"
+      },
+      {
+        "caller": "main.cbl",
+        "callee": "PAYMENT"
+      }
+    ],
+    "copy_statements": [
+      {
+        "program": "main.cbl",
+        "copybook": "common_data.cpy"
+      },
+      {
+        "program": "validation.cbl",
+        "copybook": "common_data.cpy"
+      },
+      {
+        "program": "payment.cbl",
+        "copybook": "common_data.cpy"
+      }
+    ],
+    "anti_patterns": [
+      {
+        "type": "nested_if_statements",
+        "location": "validation.cbl",
+        "description": "Deep nested IF statements instead of EVALUATE"
+      }
+    ]
+  }
+}
