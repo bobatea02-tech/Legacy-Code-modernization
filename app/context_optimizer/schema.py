@@ -60,3 +60,8 @@ class EmptyGraphError(ContextOptimizationError):
 class TokenLimitExceededError(ContextOptimizationError):
     """Raised when even the target node alone exceeds token limits."""
     pass
+
+
+class ContextWindowExceededError(ContextOptimizationError):
+    """Raised when optimized context exceeds safe context window limit."""
+    pass

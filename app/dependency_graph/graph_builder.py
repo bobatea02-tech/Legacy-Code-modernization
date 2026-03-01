@@ -194,7 +194,11 @@ class GraphBuilder:
         return f"{ast_node.file_path}:{ast_node.name}:{ast_node.start_line}"
     
     def _detect_cycles(self) -> None:
-        """Detect and log cycles in the dependency graph."""
+        """Detect and log cycles in the dependency graph.
+        
+        When cycles are detected, annotates circular edges with metadata
+        'is_circular': True for downstream consumers.
+        """
         try:
             cycles = list(nx.simple_cycles(self.graph))
             
@@ -206,6 +210,21 @@ class GraphBuilder:
                         "cycle_count": len(cycles),
                         "sample_cycles": cycles[:5]  # Log first 5 cycles
                     }
+                )
+                
+                # TASK 2: Annotate circular edges with metadata
+                for cycle in cycles:
+                    for i in range(len(cycle)):
+                        source = cycle[i]
+                        target = cycle[(i + 1) % len(cycle)]
+                        
+                        # Mark edge as circular if it exists
+                        if self.graph.has_edge(source, target):
+                            self.graph.edges[source, target]['is_circular'] = True
+                
+                logger.debug(
+                    f"Annotated {len(cycles)} circular dependency paths",
+                    extra={"stage_name": "dependency_graph", "cycle_count": len(cycles)}
                 )
             else:
                 logger.debug(

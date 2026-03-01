@@ -283,19 +283,19 @@ def test_optimize_context_target_exceeds_limit(sample_graph, sample_ast_nodes):
 
 
 def test_estimate_tokens():
-    """Test token estimation."""
+    """Test token estimation via token_estimator."""
     optimizer = ContextOptimizer()
     
     # Empty string
-    assert optimizer.estimate_tokens("") == 0
+    assert optimizer.token_estimator.estimate_tokens("") == 0
     
     # Short text
-    tokens = optimizer.estimate_tokens("hello world")
+    tokens = optimizer.token_estimator.estimate_tokens("hello world")
     assert tokens > 0
     
     # Longer text should have more tokens
-    short_tokens = optimizer.estimate_tokens("hello")
-    long_tokens = optimizer.estimate_tokens("hello world this is a longer text")
+    short_tokens = optimizer.token_estimator.estimate_tokens("hello")
+    long_tokens = optimizer.token_estimator.estimate_tokens("hello world this is a longer text")
     assert long_tokens > short_tokens
 
 
@@ -304,14 +304,14 @@ def test_estimate_tokens_deterministic():
     optimizer = ContextOptimizer()
     text = "def func():\n    return 42"
     
-    tokens1 = optimizer.estimate_tokens(text)
-    tokens2 = optimizer.estimate_tokens(text)
+    tokens1 = optimizer.token_estimator.estimate_tokens(text)
+    tokens2 = optimizer.token_estimator.estimate_tokens(text)
     
     assert tokens1 == tokens2
 
 
 def test_remove_comments_single_line():
-    """Test removal of single-line comments."""
+    """Test removal of single-line comments via token_estimator."""
     optimizer = ContextOptimizer()
     
     source = """
@@ -320,14 +320,14 @@ def func():
     return 42  // Another comment
 """
     
-    cleaned = optimizer.remove_comments(source)
+    cleaned = optimizer.token_estimator.remove_comments(source)
     
     assert "//" not in cleaned
     assert "return 42" in cleaned
 
 
 def test_remove_comments_python():
-    """Test removal of Python comments."""
+    """Test removal of Python comments via token_estimator."""
     optimizer = ContextOptimizer()
     
     source = """
@@ -336,7 +336,7 @@ def func():
     return 42  # Another comment
 """
     
-    cleaned = optimizer.remove_comments(source)
+    cleaned = optimizer.token_estimator.remove_comments(source)
     
     assert "# This is a comment" not in cleaned
     assert "return 42" in cleaned
@@ -347,14 +347,14 @@ def test_remove_comments_preserves_code():
     optimizer = ContextOptimizer()
     
     source = "def func():\n    return 42"
-    cleaned = optimizer.remove_comments(source)
+    cleaned = optimizer.token_estimator.remove_comments(source)
     
     assert "def func()" in cleaned
     assert "return 42" in cleaned
 
 
 def test_clean_source():
-    """Test source code cleaning."""
+    """Test source code cleaning via token_estimator."""
     optimizer = ContextOptimizer()
     
     source = """
@@ -363,28 +363,28 @@ def func():
     return 42
 """
     
-    cleaned = optimizer.clean_source(source)
+    cleaned = optimizer.token_estimator.clean_source(source)
     
     assert cleaned != ""
     assert "//" not in cleaned
 
 
 def test_clean_source_empty():
-    """Test cleaning empty source."""
+    """Test cleaning empty source via token_estimator."""
     optimizer = ContextOptimizer()
     
-    cleaned = optimizer.clean_source("")
+    cleaned = optimizer.token_estimator.clean_source("")
     assert cleaned == ""
 
 
 def test_remove_unused_imports():
-    """Test unused import removal (placeholder)."""
+    """Test unused import removal (placeholder) via token_estimator."""
     optimizer = ContextOptimizer()
     
     source = "import os\nimport sys\n\ndef func():\n    return 42"
     
     # Currently a placeholder, should return unchanged
-    result = optimizer.remove_unused_imports(source)
+    result = optimizer.token_estimator.remove_unused_imports(source)
     assert result == source
 
 
@@ -502,3 +502,140 @@ def test_override_parameters(sample_graph, sample_ast_nodes):
     # Should use overridden values
     assert result.expansion_depth == 1
     assert result.estimated_tokens <= 100
+
+
+def test_optimizer_with_custom_token_estimator():
+    """Test ContextOptimizer with custom TokenEstimator injection."""
+    from app.context_optimizer.token_estimator import HeuristicTokenEstimator
+    
+    # Create custom estimator with different ratio
+    custom_estimator = HeuristicTokenEstimator(chars_per_token=5)
+    
+    # Create optimizer with custom estimator
+    optimizer = ContextOptimizer(token_estimator=custom_estimator)
+    
+    # Verify estimator was injected
+    assert optimizer.token_estimator is custom_estimator
+    assert optimizer.token_estimator.chars_per_token == 5
+
+
+def test_optimizer_default_token_estimator():
+    """Test that ContextOptimizer uses default HeuristicTokenEstimator if none provided."""
+    from app.context_optimizer.token_estimator import HeuristicTokenEstimator
+    
+    optimizer = ContextOptimizer()
+    
+    # Should have default estimator
+    assert optimizer.token_estimator is not None
+    assert isinstance(optimizer.token_estimator, HeuristicTokenEstimator)
+    assert optimizer.token_estimator.chars_per_token == 4
+
+
+def test_context_window_exceeded_error():
+    """Test that ContextWindowExceededError is raised when context exceeds safe limit."""
+    from app.context_optimizer.schema import ContextWindowExceededError
+    from app.context_optimizer.token_estimator import HeuristicTokenEstimator
+    
+    # Create optimizer with very low token limit
+    optimizer = ContextOptimizer(max_tokens=100)
+    
+    # Create graph with large nodes
+    graph = nx.DiGraph()
+    graph.add_node("node1")
+    
+    # Create AST node with large source (>90 tokens at 4 chars/token = >360 chars)
+    large_source = "x" * 400  # 400 chars = 100 tokens, exceeds 90% of 100
+    
+    ast_index = {
+        "node1": ASTNode(
+            id="test::node1",
+            name="node1",
+            node_type="function",
+            parameters=[],
+            return_type=None,
+            called_symbols=[],
+            imports=[],
+            file_path="test.py",
+            start_line=1,
+            end_line=10,
+            raw_source=large_source
+        )
+    }
+    
+    # Should raise ContextWindowExceededError
+    with pytest.raises(ContextWindowExceededError) as exc_info:
+        optimizer.optimize_context("node1", graph, ast_index)
+    
+    assert "exceeds safe limit" in str(exc_info.value)
+
+
+def test_context_window_within_safe_limit():
+    """Test that optimization succeeds when context is within safe limit."""
+    optimizer = ContextOptimizer(max_tokens=1000)
+    
+    # Create simple graph
+    graph = nx.DiGraph()
+    graph.add_node("node1")
+    
+    # Create AST node with small source
+    small_source = "def test(): pass"  # ~16 chars = 4 tokens
+    
+    ast_index = {
+        "node1": ASTNode(
+            id="test::node1",
+            name="node1",
+            node_type="function",
+            parameters=[],
+            return_type=None,
+            called_symbols=[],
+            imports=[],
+            file_path="test.py",
+            start_line=1,
+            end_line=1,
+            raw_source=small_source
+        )
+    }
+    
+    # Should succeed without raising
+    result = optimizer.optimize_context("node1", graph, ast_index)
+    
+    assert result.target_node_id == "node1"
+    assert len(result.included_nodes) == 1
+    assert result.estimated_tokens < 1000 * 0.9  # Within safe limit
+
+
+def test_token_estimator_used_for_estimation():
+    """Test that optimizer uses injected token estimator for token counting."""
+    from app.context_optimizer.token_estimator import HeuristicTokenEstimator
+    
+    # Create custom estimator with different ratio
+    custom_estimator = HeuristicTokenEstimator(chars_per_token=2)  # More tokens per char
+    optimizer = ContextOptimizer(token_estimator=custom_estimator, max_tokens=1000)
+    
+    # Create graph
+    graph = nx.DiGraph()
+    graph.add_node("node1")
+    
+    # Create AST node
+    source = "x" * 100  # 100 chars
+    ast_index = {
+        "node1": ASTNode(
+            id="test::node1",
+            name="node1",
+            node_type="function",
+            parameters=[],
+            return_type=None,
+            called_symbols=[],
+            imports=[],
+            file_path="test.py",
+            start_line=1,
+            end_line=1,
+            raw_source=source
+        )
+    }
+    
+    result = optimizer.optimize_context("node1", graph, ast_index)
+    
+    # With chars_per_token=2, 100 chars = 50 tokens
+    # Should be approximately 50 (may vary due to cleaning)
+    assert 40 <= result.estimated_tokens <= 60

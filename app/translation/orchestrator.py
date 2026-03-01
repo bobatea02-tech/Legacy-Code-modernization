@@ -342,8 +342,8 @@ class TranslationOrchestrator:
             )
             
             # Estimate token usage (prompt + response)
-            token_usage = self.context_optimizer.estimate_tokens(prompt) + \
-                         self.context_optimizer.estimate_tokens(translated_code)
+            token_usage = self.context_optimizer.token_estimator.estimate_tokens(prompt) + \
+                         self.context_optimizer.token_estimator.estimate_tokens(translated_code)
             
             logger.info(
                 f"Translation complete for {node_id}",

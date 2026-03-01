@@ -6,7 +6,6 @@ code context for LLM translation while respecting token limits and dependency de
 
 from typing import Dict, List, Optional
 from collections import deque
-import re
 import networkx as nx
 
 from app.parsers.base import ASTNode
@@ -15,8 +14,10 @@ from app.context_optimizer.schema import (
     ContextOptimizationError,
     MissingNodeError,
     EmptyGraphError,
-    TokenLimitExceededError
+    TokenLimitExceededError,
+    ContextWindowExceededError
 )
+from app.context_optimizer.token_estimator import TokenEstimator, HeuristicTokenEstimator
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -26,14 +27,21 @@ logger = get_logger(__name__)
 class ContextOptimizer:
     """Optimizes code context for LLM token limits using dependency-aware selection."""
     
-    def __init__(self, max_tokens: Optional[int] = None, expansion_depth: Optional[int] = None):
-        """Initialize optimizer with token limit and expansion depth.
+    def __init__(
+        self,
+        token_estimator: Optional[TokenEstimator] = None,
+        max_tokens: Optional[int] = None,
+        expansion_depth: Optional[int] = None
+    ):
+        """Initialize optimizer with token estimator and limits.
         
         Args:
+            token_estimator: Token estimation strategy (uses HeuristicTokenEstimator if None)
             max_tokens: Maximum token count for context (uses config default if None)
             expansion_depth: Maximum dependency traversal depth (uses config default if None)
         """
         settings = get_settings()
+        self.token_estimator = token_estimator if token_estimator is not None else HeuristicTokenEstimator()
         self.max_tokens = max_tokens if max_tokens is not None else settings.MAX_TOKEN_LIMIT
         self.expansion_depth = expansion_depth if expansion_depth is not None else settings.CONTEXT_EXPANSION_DEPTH
         
@@ -100,8 +108,8 @@ class ContextOptimizer:
         
         # Always include target node first
         target_ast = ast_index[target_node_id]
-        target_source = self.clean_source(target_ast.raw_source)
-        target_tokens = self.estimate_tokens(target_source)
+        target_source = self.token_estimator.clean_source(target_ast.raw_source)
+        target_tokens = self.token_estimator.estimate_tokens(target_source)
         
         if target_tokens > max_tokens:
             logger.error(
@@ -155,8 +163,8 @@ class ContextOptimizer:
                     
                     # Estimate tokens for this dependency
                     dep_ast = ast_index[dependency]
-                    dep_source = self.clean_source(dep_ast.raw_source)
-                    dep_tokens = self.estimate_tokens(dep_source)
+                    dep_source = self.token_estimator.clean_source(dep_ast.raw_source)
+                    dep_tokens = self.token_estimator.estimate_tokens(dep_source)
                     
                     # Check if adding this dependency would exceed token limit
                     if current_tokens + dep_tokens > max_tokens:
@@ -193,7 +201,7 @@ class ContextOptimizer:
         for node_id in included_nodes:
             if node_id in ast_index:
                 ast_node = ast_index[node_id]
-                cleaned_source = self.clean_source(ast_node.raw_source)
+                cleaned_source = self.token_estimator.clean_source(ast_node.raw_source)
                 
                 # Add file path comment for context
                 file_comment = f"// File: {ast_node.file_path}, Line: {ast_node.start_line}\n"
@@ -203,6 +211,23 @@ class ContextOptimizer:
         result.excluded_nodes = excluded_nodes
         result.combined_source = "\n\n".join(combined_sources)
         result.estimated_tokens = current_tokens
+        
+        # TASK 4: Validate context window with 90% safety margin
+        safe_limit = int(max_tokens * 0.9)
+        if result.estimated_tokens > safe_limit:
+            logger.error(
+                f"Optimized context exceeds safe limit: {result.estimated_tokens} > {safe_limit} (90% of {max_tokens})",
+                extra={
+                    "stage_name": "context_optimization",
+                    "target_node_id": target_node_id,
+                    "estimated_tokens": result.estimated_tokens,
+                    "safe_limit": safe_limit,
+                    "max_tokens": max_tokens
+                }
+            )
+            raise ContextWindowExceededError(
+                f"Optimized context {result.estimated_tokens} tokens exceeds safe limit of {safe_limit} tokens (90% of {max_tokens})"
+            )
         
         logger.info(
             f"Context optimization complete: {len(included_nodes)} included, {len(excluded_nodes)} excluded, {current_tokens} tokens",
@@ -251,111 +276,6 @@ class ContextOptimizer:
                 extra={"stage_name": "context_optimization", "target_node_id": target_node_id}
             )
             raise MissingNodeError(f"Target node {target_node_id} not found in AST index")
-    
-    def estimate_tokens(self, text: str) -> int:
-        """Estimate token count for text.
-        
-        This is a placeholder implementation using a simple heuristic.
-        In production, this should use a proper tokenizer (e.g., tiktoken).
-        
-        Current heuristic: ~4 characters per token (GPT-style approximation)
-        
-        Args:
-            text: Input text
-            
-        Returns:
-            Estimated token count
-        """
-        if not text:
-            return 0
-        
-        # Simple heuristic: count words and punctuation
-        # Roughly 4 characters per token for English text
-        char_count = len(text)
-        estimated = max(1, char_count // 4)
-        
-        return estimated
-    
-    def clean_source(self, source: str) -> str:
-        """Clean source code by removing comments and unused imports.
-        
-        This is a placeholder implementation with basic cleaning.
-        In production, this should use language-specific parsers.
-        
-        Args:
-            source: Raw source code
-            
-        Returns:
-            Cleaned source code
-        """
-        if not source:
-            return ""
-        
-        # Apply cleaning functions
-        cleaned = self.remove_comments(source)
-        cleaned = self.remove_unused_imports(cleaned)
-        
-        return cleaned.strip()
-    
-    def remove_comments(self, source: str) -> str:
-        """Remove comments from source code.
-        
-        Placeholder implementation - removes basic single-line and multi-line comments.
-        In production, use language-specific parsers to avoid breaking strings.
-        
-        Args:
-            source: Source code
-            
-        Returns:
-            Source code without comments
-        """
-        if not source:
-            return ""
-        
-        # Remove single-line comments (// and #)
-        # This is a naive implementation - production should use proper parsing
-        lines = source.split('\n')
-        cleaned_lines = []
-        
-        for line in lines:
-            # Remove // comments (Java, C, JavaScript)
-            if '//' in line:
-                line = line.split('//')[0]
-            
-            # Remove # comments (Python, shell)
-            if '#' in line and not line.strip().startswith('#include'):
-                # Preserve #include directives
-                line = line.split('#')[0]
-            
-            # Keep non-empty lines
-            if line.strip():
-                cleaned_lines.append(line)
-        
-        result = '\n'.join(cleaned_lines)
-        
-        # Remove multi-line comments /* ... */ (naive approach)
-        result = re.sub(r'/\*.*?\*/', '', result, flags=re.DOTALL)
-        
-        return result
-    
-    def remove_unused_imports(self, source: str) -> str:
-        """Remove unused import statements.
-        
-        Placeholder implementation - currently just returns source as-is.
-        In production, this should analyze symbol usage and remove unused imports.
-        
-        Args:
-            source: Source code
-            
-        Returns:
-            Source code without unused imports
-        """
-        # Placeholder: return source unchanged
-        # Production implementation would:
-        # 1. Parse import statements
-        # 2. Analyze symbol usage in code
-        # 3. Remove imports for unused symbols
-        return source
     
     def optimize(self, code_units: List[Dict]) -> List[Dict]:
         """Legacy method for backward compatibility.

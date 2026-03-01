@@ -5,7 +5,13 @@ from app.context_optimizer.schema import (
     ContextOptimizationError,
     MissingNodeError,
     EmptyGraphError,
-    TokenLimitExceededError
+    TokenLimitExceededError,
+    ContextWindowExceededError
+)
+from app.context_optimizer.token_estimator import (
+    TokenEstimator,
+    HeuristicTokenEstimator,
+    TiktokenEstimator
 )
 
 __all__ = [
@@ -14,5 +20,9 @@ __all__ = [
     'ContextOptimizationError',
     'MissingNodeError',
     'EmptyGraphError',
-    'TokenLimitExceededError'
+    'TokenLimitExceededError',
+    'ContextWindowExceededError',
+    'TokenEstimator',
+    'HeuristicTokenEstimator',
+    'TiktokenEstimator'
 ]

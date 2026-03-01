@@ -454,3 +454,39 @@ def test_large_graph_performance():
     
     # Performance should be acceptable (O(n))
     assert graph.number_of_edges() > 0
+
+
+def test_circular_dependency_annotation(cyclic_ast_nodes):
+    """Test that circular dependencies are annotated with is_circular metadata."""
+    builder = GraphBuilder()
+    graph = builder.build_graph(cyclic_ast_nodes)
+    
+    # Verify graph was built
+    assert graph.number_of_nodes() == 3
+    
+    # Check that circular edges are annotated
+    # The cycle is: func_a -> func_b -> func_c -> func_a
+    node_a = "cycle.py:func_a:10"
+    node_b = "cycle.py:func_b:20"
+    node_c = "cycle.py:func_c:30"
+    
+    # All edges in the cycle should be marked as circular
+    if graph.has_edge(node_a, node_b):
+        assert graph.edges[node_a, node_b].get('is_circular', False) == True
+    
+    if graph.has_edge(node_b, node_c):
+        assert graph.edges[node_b, node_c].get('is_circular', False) == True
+    
+    if graph.has_edge(node_c, node_a):
+        assert graph.edges[node_c, node_a].get('is_circular', False) == True
+
+
+def test_non_circular_edges_not_annotated(sample_ast_nodes):
+    """Test that non-circular edges are not marked as circular."""
+    builder = GraphBuilder()
+    graph = builder.build_graph(sample_ast_nodes)
+    
+    # Check that edges without cycles don't have is_circular metadata
+    for source, target, data in graph.edges(data=True):
+        # Non-circular edges should not have is_circular=True
+        assert data.get('is_circular', False) == False
