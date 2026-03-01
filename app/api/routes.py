@@ -280,6 +280,9 @@ async def translate(
         if pipeline_result.evaluation_report:
             storage.store_evaluation(repo_id, pipeline_result.evaluation_report)
         
+        # Store prompt versions
+        storage.store_prompt_versions(repo_id, pipeline_result.prompt_versions)
+        
         # Build response
         modules_response = []
         for i, trans_result in enumerate(pipeline_result.translation_results):
@@ -521,12 +524,16 @@ async def get_report(
     # Get evaluation report
     evaluation = storage.get_evaluation(repository_id)
     
+    # Get prompt versions
+    prompt_versions = storage.get_prompt_versions(repository_id)
+    
     statistics = {
         "total_modules": len(translations),
         "total_validations": len(validations),
         "documentation_count": len(documentation_response),
         "audit_passed": audit_data["overall_passed"] if audit_data else False,
-        "evaluation": evaluation if evaluation else None
+        "evaluation": evaluation if evaluation else None,
+        "prompt_versions": prompt_versions if prompt_versions else {}
     }
     
     return ReportResponse(

@@ -51,6 +51,7 @@ class PipelineResult:
         audit_report: Audit report
         documentation: Generated documentation
         evaluation_report: Evaluation report (metrics and analysis)
+        prompt_versions: Dictionary of prompt_name -> version used
         errors: List of error messages
         warnings: List of warning messages
         start_time: Pipeline start timestamp
@@ -67,6 +68,7 @@ class PipelineResult:
     audit_report: Optional[any] = None
     documentation: Dict[str, str] = field(default_factory=dict)
     evaluation_report: Optional[Dict[str, Any]] = None
+    prompt_versions: Dict[str, str] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     start_time: float = 0.0
@@ -140,17 +142,31 @@ class PipelineService:
         """
         result = PipelineResult(success=False)
         result.start_time = time.time()
+        result.repository_id = repository_id or "unknown"
         
         # Track phase runtimes for evaluation
         phase_runtimes = {}
-        phase_start = time.time()
         
         try:
             # Phase 1: Ingestion
-            logger.info("Phase 1: Ingesting repository")
+            phase_start = time.time()
+            logger.info(
+                "Phase 1: Ingesting repository",
+                extra={"phase": "ingestion", "repo_id": result.repository_id}
+            )
             file_metadata_list = await self._phase_1_ingest(repo_path)
             result.file_count = len(file_metadata_list)
-            phase_runtimes["ingestion"] = time.time() - phase_start
+            phase_duration = time.time() - phase_start
+            phase_runtimes["ingestion"] = phase_duration
+            logger.info(
+                f"Phase 1 complete: {len(file_metadata_list)} files ingested",
+                extra={
+                    "phase": "ingestion",
+                    "repo_id": result.repository_id,
+                    "duration": phase_duration,
+                    "file_count": len(file_metadata_list)
+                }
+            )
             
             if not file_metadata_list:
                 result.errors.append("No files found in repository")
@@ -159,13 +175,26 @@ class PipelineService:
             
             # Phase 2: AST Parsing
             phase_start = time.time()
-            logger.info("Phase 2: Parsing files to AST")
+            logger.info(
+                "Phase 2: Parsing files to AST",
+                extra={"phase": "parsing", "repo_id": result.repository_id}
+            )
             ast_nodes, ast_index = await self._phase_2_parse(
                 file_metadata_list,
                 source_language
             )
             result.ast_node_count = len(ast_nodes)
-            phase_runtimes["parsing"] = time.time() - phase_start
+            phase_duration = time.time() - phase_start
+            phase_runtimes["parsing"] = phase_duration
+            logger.info(
+                f"Phase 2 complete: {len(ast_nodes)} AST nodes parsed",
+                extra={
+                    "phase": "parsing",
+                    "repo_id": result.repository_id,
+                    "duration": phase_duration,
+                    "ast_node_count": len(ast_nodes)
+                }
+            )
             
             if not ast_nodes:
                 result.errors.append("No parseable files found")
@@ -174,78 +203,176 @@ class PipelineService:
             
             # Phase 3: Dependency Graph
             phase_start = time.time()
-            logger.info("Phase 3: Building dependency graph")
+            logger.info(
+                "Phase 3: Building dependency graph",
+                extra={"phase": "graph_building", "repo_id": result.repository_id}
+            )
             dependency_graph = await self._phase_3_build_graph(ast_nodes)
             result.graph_node_count = dependency_graph.number_of_nodes()
             result.graph_edge_count = dependency_graph.number_of_edges()
-            phase_runtimes["graph_building"] = time.time() - phase_start
+            phase_duration = time.time() - phase_start
+            phase_runtimes["graph_building"] = phase_duration
+            logger.info(
+                f"Phase 3 complete: {result.graph_node_count} nodes, {result.graph_edge_count} edges",
+                extra={
+                    "phase": "graph_building",
+                    "repo_id": result.repository_id,
+                    "duration": phase_duration,
+                    "node_count": result.graph_node_count,
+                    "edge_count": result.graph_edge_count
+                }
+            )
             
             # Phase 4: Context Optimization (implicit in translation)
-            logger.info("Phase 4: Context optimization ready")
+            logger.info(
+                "Phase 4: Context optimization ready",
+                extra={"phase": "context_optimization", "repo_id": result.repository_id}
+            )
             
             # Phase 5: Translation
             phase_start = time.time()
-            logger.info("Phase 5: Translating code")
+            logger.info(
+                "Phase 5: Translating code",
+                extra={
+                    "phase": "translation",
+                    "repo_id": result.repository_id
+                }
+            )
             translation_results = await self._phase_5_translate(
                 dependency_graph,
                 ast_index,
                 target_language
             )
             result.translation_results = translation_results
-            phase_runtimes["translation"] = time.time() - phase_start
+            phase_duration = time.time() - phase_start
+            phase_runtimes["translation"] = phase_duration
+            
+            # Record prompt version used (get from orchestrator)
+            translation_prompt_version = self.translation_orchestrator.get_prompt_version("code_translation")
+            result.prompt_versions["code_translation"] = translation_prompt_version
+            
+            logger.info(
+                f"Phase 5 complete: {len(translation_results)} modules translated",
+                extra={
+                    "phase": "translation",
+                    "repo_id": result.repository_id,
+                    "duration": phase_duration,
+                    "module_count": len(translation_results),
+                    "prompt_version": translation_prompt_version
+                }
+            )
             
             # Phase 6: Validation
             phase_start = time.time()
-            logger.info("Phase 6: Validating translations")
+            logger.info(
+                "Phase 6: Validating translations",
+                extra={"phase": "validation", "repo_id": result.repository_id}
+            )
             validation_reports = await self._phase_6_validate(
                 translation_results,
                 ast_index,
                 dependency_graph
             )
             result.validation_reports = validation_reports
-            phase_runtimes["validation"] = time.time() - phase_start
+            phase_duration = time.time() - phase_start
+            phase_runtimes["validation"] = phase_duration
+            logger.info(
+                f"Phase 6 complete: {len(validation_reports)} validations performed",
+                extra={
+                    "phase": "validation",
+                    "repo_id": result.repository_id,
+                    "duration": phase_duration,
+                    "validation_count": len(validation_reports)
+                }
+            )
             
-            # Phase 7: Documentation (mock)
+            # Phase 7: Documentation
             phase_start = time.time()
-            logger.info("Phase 7: Generating documentation")
+            logger.info(
+                "Phase 7: Generating documentation",
+                extra={"phase": "documentation", "repo_id": result.repository_id}
+            )
             documentation = await self._phase_7_document(translation_results)
             result.documentation = documentation
-            phase_runtimes["documentation"] = time.time() - phase_start
+            phase_duration = time.time() - phase_start
+            phase_runtimes["documentation"] = phase_duration
+            logger.info(
+                f"Phase 7 complete: {len(documentation)} modules documented",
+                extra={
+                    "phase": "documentation",
+                    "repo_id": result.repository_id,
+                    "duration": phase_duration,
+                    "doc_count": len(documentation)
+                }
+            )
             
             # Phase 8: Audit
             phase_start = time.time()
-            logger.info("Phase 8: Running audit")
+            logger.info(
+                "Phase 8: Running audit",
+                extra={"phase": "audit", "repo_id": result.repository_id}
+            )
             audit_report = await self._phase_8_audit(
                 validation_reports,
                 documentation
             )
             result.audit_report = audit_report
-            phase_runtimes["audit"] = time.time() - phase_start
+            phase_duration = time.time() - phase_start
+            phase_runtimes["audit"] = phase_duration
+            logger.info(
+                f"Phase 8 complete: audit {'passed' if audit_report.overall_passed else 'failed'}",
+                extra={
+                    "phase": "audit",
+                    "repo_id": result.repository_id,
+                    "duration": phase_duration,
+                    "audit_passed": audit_report.overall_passed
+                }
+            )
             
             # Mark success
             result.success = True
-            result.repository_id = repository_id
             result.end_time = time.time()
             
-            # Phase 9: Evaluation (NEW)
-            logger.info("Phase 9: Evaluating pipeline effectiveness")
+            # Phase 9: Evaluation
+            phase_start = time.time()
+            logger.info(
+                "Phase 9: Evaluating pipeline effectiveness",
+                extra={"phase": "evaluation", "repo_id": result.repository_id}
+            )
             evaluation_report = await self._phase_9_evaluate(
                 result,
                 phase_runtimes
             )
             result.evaluation_report = evaluation_report
+            phase_duration = time.time() - phase_start
+            logger.info(
+                f"Phase 9 complete: efficiency score {evaluation_report['token_metrics']['efficiency_score']}/100",
+                extra={
+                    "phase": "evaluation",
+                    "repo_id": result.repository_id,
+                    "duration": phase_duration,
+                    "efficiency_score": evaluation_report['token_metrics']['efficiency_score']
+                }
+            )
             
             logger.info(
                 f"Pipeline complete: {len(translation_results)} translations, "
                 f"{len(validation_reports)} validations, "
                 f"audit {'passed' if audit_report.overall_passed else 'failed'}, "
-                f"efficiency score: {evaluation_report['token_metrics']['efficiency_score']}/100"
+                f"efficiency score: {evaluation_report['token_metrics']['efficiency_score']}/100",
+                extra={
+                    "repo_id": result.repository_id,
+                    "total_duration": result.end_time - result.start_time
+                }
             )
             
             return result
             
         except Exception as e:
-            logger.error(f"Pipeline execution failed: {e}")
+            logger.error(
+                f"Pipeline execution failed: {e}",
+                extra={"repo_id": result.repository_id, "error": str(e)}
+            )
             result.errors.append(str(e))
             result.end_time = time.time()
             return result
@@ -347,6 +474,9 @@ class PipelineService:
             context_optimizer=self.context_optimizer,
             translation_store=self.translation_store
         )
+        
+        # Store orchestrator reference to access prompt version later
+        self.translation_orchestrator = orchestrator
         
         translation_results = await orchestrator.translate_repository(
             dependency_graph=dependency_graph,
@@ -482,7 +612,8 @@ class PipelineService:
             errors_encountered=len(pipeline_result.errors),
             phase_metadata={
                 "phase_runtimes": phase_runtimes,
-                "validation": validation_metrics
+                "validation": validation_metrics,
+                "prompt_versions": pipeline_result.prompt_versions
             }
         )
         

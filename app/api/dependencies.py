@@ -164,6 +164,7 @@ class InMemoryStorage:
         self._documentation: dict = {}
         self._audits: dict = {}
         self._evaluations: dict = {}
+        self._prompt_versions: dict = {}
     
     def store_repository(self, repo_id: str, data: dict) -> None:
         """Store repository data."""
@@ -220,6 +221,14 @@ class InMemoryStorage:
     def get_evaluation(self, repo_id: str) -> Optional[dict]:
         """Get evaluation report."""
         return self._evaluations.get(repo_id)
+    
+    def store_prompt_versions(self, repo_id: str, prompt_versions: dict) -> None:
+        """Store prompt versions used in pipeline."""
+        self._prompt_versions[repo_id] = prompt_versions
+    
+    def get_prompt_versions(self, repo_id: str) -> Optional[dict]:
+        """Get prompt versions used in pipeline."""
+        return self._prompt_versions.get(repo_id)
     
     def has_repository(self, repo_id: str) -> bool:
         """Check if repository exists."""

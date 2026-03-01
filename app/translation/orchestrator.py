@@ -16,6 +16,7 @@ from app.llm.client import LLMClient
 from app.parsers.base import ASTNode
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.prompt_versioning import PromptVersionManager
 
 logger = get_logger(__name__)
 
@@ -108,7 +109,8 @@ class TranslationOrchestrator:
         self,
         llm_client: LLMClient,
         context_optimizer: Optional[ContextOptimizer] = None,
-        translation_store: Optional[TranslationStore] = None
+        translation_store: Optional[TranslationStore] = None,
+        prompt_manager: Optional[PromptVersionManager] = None
     ):
         """Initialize translation orchestrator.
         
@@ -116,13 +118,16 @@ class TranslationOrchestrator:
             llm_client: LLM client for translation
             context_optimizer: Context optimizer (optional, uses default if None)
             translation_store: Translation cache (optional, creates new if None)
+            prompt_manager: Prompt version manager (optional, creates new if None)
         """
         self.llm_client = llm_client
         self.context_optimizer = context_optimizer or ContextOptimizer()
         self.translation_store = translation_store or TranslationStore()
+        self.prompt_manager = prompt_manager or PromptVersionManager()
         self.settings = get_settings()
         
-        # Load translation prompt template from file
+        # Register and load translation prompt template
+        self._register_prompts()
         self._translation_prompt_template = self._load_prompt_template()
         
         logger.info(
@@ -398,41 +403,92 @@ class TranslationOrchestrator:
         return hashlib.sha256(source.encode('utf-8')).hexdigest()
     
     def _load_prompt_template(self) -> str:
-        """Load translation prompt template from file.
+        """Load translation prompt template using PromptVersionManager.
         
         Returns:
             Prompt template string
         """
-        prompt_file = Path("prompts/translation_v1.txt")
-        
         try:
-            with open(prompt_file, 'r', encoding='utf-8') as f:
-                template = f.read()
+            # Use versioned prompt from PromptVersionManager
+            prompt = self.prompt_manager.get_latest("code_translation")
             logger.debug(
-                f"Loaded prompt template from {prompt_file}",
-                extra={"stage_name": "translation_orchestration"}
+                f"Loaded prompt template: code_translation v{prompt.version}",
+                extra={
+                    "stage_name": "translation_orchestration",
+                    "prompt_name": "code_translation",
+                    "prompt_version": prompt.version
+                }
             )
-            return template
-        except FileNotFoundError:
-            error_msg = (
-                "Required prompt file 'prompts/translation_v1.txt' "
-                "not found. Externalized prompts are mandatory."
-            )
-            logger.error(
-                error_msg,
-                extra={"stage_name": "translation_orchestration"}
-            )
-            raise FileNotFoundError(error_msg)
+            return prompt.content
         except Exception as e:
             error_msg = (
-                "Required prompt file 'prompts/translation_v1.txt' "
-                "not found. Externalized prompts are mandatory."
+                f"Failed to load prompt template 'code_translation': {e}. "
+                "Ensure prompts are registered in PromptVersionManager."
             )
             logger.error(
                 error_msg,
                 extra={"stage_name": "translation_orchestration", "error": str(e)}
             )
             raise FileNotFoundError(error_msg)
+    
+    def _register_prompts(self) -> None:
+        """Register prompt templates in PromptVersionManager.
+        
+        Loads prompts from files and registers them with version 1.0.0.
+        This should be called once during initialization.
+        """
+        prompts_to_register = [
+            ("code_translation", "prompts/translation_v1.txt", "Code translation prompt"),
+        ]
+        
+        for prompt_name, prompt_file, description in prompts_to_register:
+            try:
+                # Check if prompt already registered
+                try:
+                    existing = self.prompt_manager.get_latest(prompt_name)
+                    logger.debug(
+                        f"Prompt '{prompt_name}' already registered at v{existing.version}",
+                        extra={"stage_name": "translation_orchestration"}
+                    )
+                    continue
+                except:
+                    # Prompt not registered, proceed with registration
+                    pass
+                
+                # Load prompt content from file
+                prompt_path = Path(prompt_file)
+                if not prompt_path.exists():
+                    logger.warning(
+                        f"Prompt file not found: {prompt_file}",
+                        extra={"stage_name": "translation_orchestration"}
+                    )
+                    continue
+                
+                with open(prompt_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Register with version 1.0.0
+                self.prompt_manager.register_prompt(
+                    name=prompt_name,
+                    version="1.0.0",
+                    content=content,
+                    metadata={
+                        "description": description,
+                        "source_file": prompt_file,
+                        "registered_at": "pipeline_initialization"
+                    }
+                )
+                
+                logger.info(
+                    f"Registered prompt '{prompt_name}' v1.0.0",
+                    extra={"stage_name": "translation_orchestration"}
+                )
+                
+            except Exception as e:
+                logger.warning(
+                    f"Failed to register prompt '{prompt_name}': {e}",
+                    extra={"stage_name": "translation_orchestration", "error": str(e)}
+                )
     
     def _sanitize_code(self, code: str, max_length: int = 50000) -> str:
         """Sanitize code to prevent token overflow.
@@ -512,3 +568,18 @@ class TranslationOrchestrator:
             "total_warnings": total_warnings,
             "average_tokens_per_module": (total_tokens / total) if total > 0 else 0
         }
+    
+    def get_prompt_version(self, prompt_name: str) -> str:
+        """Get current version of a prompt.
+        
+        Args:
+            prompt_name: Name of the prompt
+            
+        Returns:
+            Version string (e.g., "1.0.0")
+        """
+        try:
+            prompt = self.prompt_manager.get_latest(prompt_name)
+            return prompt.version
+        except Exception:
+            return "unknown"

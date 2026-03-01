@@ -121,6 +121,7 @@ class EvaluationReport:
         quality_metrics: Quality signal metrics
         summary_text: Human-readable summary
         timestamp: Report generation timestamp (ISO format)
+        prompt_versions: Dictionary of prompt_name -> version used
     """
     repo_id: str
     token_metrics: TokenMetrics
@@ -128,6 +129,7 @@ class EvaluationReport:
     quality_metrics: QualityMetrics
     summary_text: str
     timestamp: str
+    prompt_versions: Dict[str, str] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization.
@@ -141,7 +143,8 @@ class EvaluationReport:
             "runtime_metrics": self.runtime_metrics.to_dict(),
             "quality_metrics": self.quality_metrics.to_dict(),
             "summary_text": self.summary_text,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
+            "prompt_versions": self.prompt_versions
         }
 
 
@@ -187,6 +190,9 @@ class PipelineEvaluator:
             quality_metrics
         )
         
+        # Extract prompt versions from metadata
+        prompt_versions = evaluation_input.phase_metadata.get("prompt_versions", {})
+        
         # Create report
         report = EvaluationReport(
             repo_id=evaluation_input.repo_id,
@@ -194,7 +200,8 @@ class PipelineEvaluator:
             runtime_metrics=runtime_metrics,
             quality_metrics=quality_metrics,
             summary_text=summary_text,
-            timestamp=datetime.now(timezone.utc).isoformat()
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            prompt_versions=prompt_versions
         )
         
         logger.info(
@@ -203,7 +210,8 @@ class PipelineEvaluator:
                 "repo_id": evaluation_input.repo_id,
                 "efficiency_score": token_metrics.efficiency_score,
                 "total_runtime": runtime_metrics.total_runtime_seconds,
-                "validation_pass_rate": quality_metrics.validation_pass_rate
+                "validation_pass_rate": quality_metrics.validation_pass_rate,
+                "prompt_versions": prompt_versions
             }
         )
         
