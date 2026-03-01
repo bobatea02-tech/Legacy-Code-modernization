@@ -25,6 +25,7 @@ from app.parsers.registry import get_registry
 from app.dependency_graph.graph_builder import GraphBuilder
 from app.context_optimizer.optimizer import ContextOptimizer
 from app.llm.gemini_client import GeminiClient
+from app.llm.llm_service import LLMService
 from app.translation.orchestrator import TranslationOrchestrator, TranslationStore
 from app.validation import ValidationEngine
 from app.audit import AuditEngine
@@ -86,7 +87,11 @@ class PipelineService:
         self.ingestor: Optional[RepositoryIngestor] = None
         self.graph_builder = GraphBuilder()
         self.context_optimizer = ContextOptimizer()
-        self.llm_client = GeminiClient()
+        
+        # Initialize LLM client and service
+        llm_client = GeminiClient()
+        self.llm_service = LLMService(llm_client)
+        
         self.translation_store = TranslationStore()
         self.validation_engine = ValidationEngine()
         self.audit_engine = AuditEngine()
@@ -466,7 +471,7 @@ class PipelineService:
             List of TranslationResult objects
         """
         orchestrator = TranslationOrchestrator(
-            llm_client=self.llm_client,
+            llm_service=self.llm_service,
             context_optimizer=self.context_optimizer,
             translation_store=self.translation_store
         )

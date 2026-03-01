@@ -13,6 +13,7 @@ from app.parsers.cobol_parser import CobolParser
 from app.dependency_graph.graph_builder import GraphBuilder
 from app.context_optimizer.optimizer import ContextOptimizer
 from app.llm.gemini_client import GeminiClient
+from app.llm.llm_service import LLMService
 from app.translation.orchestrator import TranslationOrchestrator, TranslationStore
 from app.validation import ValidationEngine
 from app.audit import AuditEngine
@@ -59,13 +60,14 @@ def get_context_optimizer() -> ContextOptimizer:
 
 
 @lru_cache
-def get_llm_client() -> GeminiClient:
-    """Get LLM client service.
+def get_llm_service() -> LLMService:
+    """Get LLM service with caching and retry.
     
     Returns:
-        GeminiClient instance
+        LLMService instance
     """
-    return GeminiClient()
+    llm_client = GeminiClient()
+    return LLMService(llm_client)
 
 
 @lru_cache
@@ -108,12 +110,12 @@ def get_translation_service() -> TranslationOrchestrator:
     Returns:
         TranslationOrchestrator instance with injected dependencies
     """
-    llm_client = get_llm_client()
+    llm_service = get_llm_service()
     context_optimizer = get_context_optimizer()
     translation_store = TranslationStore()
     
     return TranslationOrchestrator(
-        llm_client=llm_client,
+        llm_service=llm_service,
         context_optimizer=context_optimizer,
         translation_store=translation_store
     )

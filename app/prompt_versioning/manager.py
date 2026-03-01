@@ -17,6 +17,7 @@ import hashlib
 import re
 
 from app.core.logging import get_logger
+from app.prompt_versioning.schema import PromptBundle
 
 logger = get_logger(__name__)
 
@@ -320,6 +321,45 @@ class PromptVersionManager:
         )
         
         return prompt
+    
+    def get_prompt_bundle(self, name: str, version: Optional[str] = None) -> PromptBundle:
+        """Retrieve prompt as structured PromptBundle.
+        
+        Args:
+            name: Prompt template name
+            version: Version string (uses latest if None)
+            
+        Returns:
+            PromptBundle with system and user prompts separated
+            
+        Raises:
+            PromptNotFoundError: If prompt doesn't exist
+            VersionNotFoundError: If version doesn't exist
+        """
+        if version is None:
+            prompt = self.get_latest(name)
+        else:
+            prompt = self.get_prompt(name, version)
+        
+        # Parse content to separate system and user prompts
+        # Format: "SYSTEM:\n<system_prompt>\n\nUSER:\n<user_prompt>"
+        content = prompt.content
+        
+        if "SYSTEM:" in content and "USER:" in content:
+            parts = content.split("USER:", 1)
+            system_part = parts[0].replace("SYSTEM:", "").strip()
+            user_part = parts[1].strip()
+        else:
+            # Fallback: treat entire content as user prompt
+            system_part = ""
+            user_part = content
+        
+        return PromptBundle(
+            system_prompt=system_part,
+            user_prompt=user_part,
+            version=prompt.version,
+            metadata=prompt.metadata
+        )
     
     def get_latest(self, name: str) -> PromptTemplate:
         """Retrieve latest (active) version of prompt.

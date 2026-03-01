@@ -12,11 +12,12 @@ import hashlib
 import networkx as nx
 
 from app.context_optimizer.optimizer import ContextOptimizer
-from app.llm.client import LLMClient
+from app.llm.llm_service import LLMService
 from app.parsers.base import ASTNode
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.prompt_versioning import PromptVersionManager
+from app.prompt_versioning.schema import PromptBundle
 
 logger = get_logger(__name__)
 
@@ -107,7 +108,7 @@ class TranslationOrchestrator:
     
     def __init__(
         self,
-        llm_client: LLMClient,
+        llm_service: LLMService,
         context_optimizer: Optional[ContextOptimizer] = None,
         translation_store: Optional[TranslationStore] = None,
         prompt_manager: Optional[PromptVersionManager] = None
@@ -115,12 +116,12 @@ class TranslationOrchestrator:
         """Initialize translation orchestrator.
         
         Args:
-            llm_client: LLM client for translation
+            llm_service: LLM service for translation (with caching and retry)
             context_optimizer: Context optimizer (optional, uses default if None)
             translation_store: Translation cache (optional, creates new if None)
             prompt_manager: Prompt version manager (optional, creates new if None)
         """
-        self.llm_client = llm_client
+        self.llm_service = llm_service
         self.context_optimizer = context_optimizer or ContextOptimizer()
         self.translation_store = translation_store or TranslationStore()
         self.prompt_manager = prompt_manager or PromptVersionManager()
@@ -128,7 +129,6 @@ class TranslationOrchestrator:
         
         # Register and load translation prompt template
         self._register_prompts()
-        self._translation_prompt_template = self._load_prompt_template()
         
         logger.info(
             "TranslationOrchestrator initialized",
@@ -325,8 +325,8 @@ class TranslationOrchestrator:
                 errors=[f"Context optimization failed: {e}"]
             )
         
-        # Prepare translation prompt
-        prompt = self._build_translation_prompt(
+        # Prepare translation prompt bundle
+        prompt_bundle = self._build_translation_prompt(
             source_code=optimized_context.combined_source,
             target_language=target_language,
             node_name=ast_node.name,
@@ -335,15 +335,23 @@ class TranslationOrchestrator:
         
         # Call LLM for translation
         try:
-            translated_code = await self.llm_client.generate(
-                prompt=prompt,
-                temperature=0.3,  # Lower temperature for more deterministic translation
-                max_tokens=self.settings.MAX_TOKEN_LIMIT
+            response = self.llm_service.generate(
+                system_prompt=prompt_bundle.system_prompt,
+                user_prompt=prompt_bundle.user_prompt,
+                max_tokens=self.settings.MAX_TOKEN_LIMIT,
+                temperature=0.3  # Lower temperature for more deterministic translation
             )
             
-            # Estimate token usage (prompt + response)
-            token_usage = self.context_optimizer.token_estimator.estimate_tokens(prompt) + \
-                         self.context_optimizer.token_estimator.estimate_tokens(translated_code)
+            translated_code = response.text
+            
+            # Use token count from response if available, otherwise estimate
+            if response.token_count > 0:
+                token_usage = response.token_count
+            else:
+                # Estimate token usage (prompt + response)
+                token_usage = self.context_optimizer.token_estimator.estimate_tokens(
+                    prompt_bundle.system_prompt + prompt_bundle.user_prompt
+                ) + self.context_optimizer.token_estimator.estimate_tokens(translated_code)
             
             logger.info(
                 f"Translation complete for {node_id}",
@@ -401,35 +409,6 @@ class TranslationOrchestrator:
             Hexadecimal hash string
         """
         return hashlib.sha256(source.encode('utf-8')).hexdigest()
-    
-    def _load_prompt_template(self) -> str:
-        """Load translation prompt template using PromptVersionManager.
-        
-        Returns:
-            Prompt template string
-        """
-        try:
-            # Use versioned prompt from PromptVersionManager
-            prompt = self.prompt_manager.get_latest("code_translation")
-            logger.debug(
-                f"Loaded prompt template: code_translation v{prompt.version}",
-                extra={
-                    "stage_name": "translation_orchestration",
-                    "prompt_name": "code_translation",
-                    "prompt_version": prompt.version
-                }
-            )
-            return prompt.content
-        except Exception as e:
-            error_msg = (
-                f"Failed to load prompt template 'code_translation': {e}. "
-                "Ensure prompts are registered in PromptVersionManager."
-            )
-            logger.error(
-                error_msg,
-                extra={"stage_name": "translation_orchestration", "error": str(e)}
-            )
-            raise FileNotFoundError(error_msg)
     
     def _register_prompts(self) -> None:
         """Register prompt templates in PromptVersionManager.
@@ -518,8 +497,8 @@ class TranslationOrchestrator:
         target_language: str,
         node_name: str,
         node_type: str
-    ) -> str:
-        """Build translation prompt from template.
+    ) -> PromptBundle:
+        """Build structured translation prompt bundle.
         
         Args:
             source_code: Source code to translate
@@ -528,16 +507,40 @@ class TranslationOrchestrator:
             node_type: Type of the node (function, class, etc.)
             
         Returns:
-            Formatted prompt string
+            PromptBundle with system and user prompts
         """
         # Sanitize source code to prevent token overflow
         sanitized_source = self._sanitize_code(source_code)
         
-        return self._translation_prompt_template.format(
+        # Get prompt bundle from version manager
+        try:
+            prompt_bundle = self.prompt_manager.get_prompt_bundle("code_translation")
+        except Exception as e:
+            logger.error(
+                f"Failed to load prompt bundle: {e}",
+                extra={"stage_name": "translation_orchestration", "error": str(e)}
+            )
+            # Fallback to basic prompts
+            prompt_bundle = PromptBundle(
+                system_prompt="You are a code translation assistant. Translate the provided code accurately.",
+                user_prompt="Translate the following code to {target_language}:\n\n{source_code}",
+                version="fallback",
+                metadata={}
+            )
+        
+        # Format user prompt with actual values
+        formatted_user_prompt = prompt_bundle.user_prompt.format(
             node_type=node_type,
             node_name=node_name,
             target_language=target_language,
             source_code=sanitized_source
+        )
+        
+        return PromptBundle(
+            system_prompt=prompt_bundle.system_prompt,
+            user_prompt=formatted_user_prompt,
+            version=prompt_bundle.version,
+            metadata=prompt_bundle.metadata
         )
     
     def get_translation_statistics(self, results: List[TranslationResult]) -> Dict[str, any]:

@@ -1,0 +1,224 @@
+{
+  "phase": "LLM Phase 03",
+  "status": "FAIL",
+  "violations": [
+    {
+      "rule": "1. LLM interface must expose a single responsibility: model invocation",
+      "files": [
+        "app/llm/gemini_client.py"
+      ],
+      "severity": "MEDIUM",
+      "reason": "GeminiClient contains caching logic, retry logic, token estimation, and request ID generation. These are cross-cutting concerns that should be separated. The client should focus solely on API invocation.",
+      "refactor_plan": "Extract caching into a separate CacheService, retry logic into a RetryPolicy decorator, and token estimation into TokenEstimator (already exists in context_optimizer). GeminiClient should only handle API communication."
+    },
+    {
+      "rule": "4. LLM interface must NOT contain dependency graph traversal logic",
+      "files": [
+        "app/llm/gemini_client.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - No dependency graph traversal logic found in LLM interface.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "4. LLM interface must NOT manipulate AST nodes directly",
+      "files": [
+        "app/llm/gemini_client.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - No AST manipulation found in LLM interface.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "4. LLM interface must NOT perform context expansion",
+      "files": [
+        "app/llm/gemini_client.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - No context expansion logic found in LLM interface.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "5. Token usage returned from LLM must be logged and traceable",
+      "files": [
+        "app/llm/gemini_client.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - Token estimates are logged in LLMResponse and tracked via request_id. Logging includes token_estimate in structured logs.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "6. TranslationOrchestrator must control execution order explicitly",
+      "files": [
+        "app/translation/orchestrator.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - TranslationOrchestrator.translate_repository() performs topological sort and enforces leaf-first translation order explicitly.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "7. Leaf-first translation strategy must be implemented",
+      "files": [
+        "app/translation/orchestrator.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - Uses nx.topological_sort() which provides leaf-first ordering for DAG traversal (line 119-127).",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "8. Circular dependency handling must be enforced before translation call",
+      "files": [
+        "app/translation/orchestrator.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - Circular dependencies are detected using nx.is_directed_acyclic_graph() and raise ValueError before translation begins (lines 107-118).",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "9. Optimizer must be invoked before every LLM call",
+      "files": [
+        "app/translation/orchestrator.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - ContextOptimizer.optimize_context() is called in _translate_node() before building translation prompt (lines 217-237).",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "10. Orchestrator must reject context exceeding token limits",
+      "files": [
+        "app/translation/orchestrator.py",
+        "app/context_optimizer/optimizer.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - ContextOptimizer enforces token limits with 90% safety margin and raises ContextWindowExceededError (optimizer.py lines 165-178). TranslationOrchestrator catches optimization errors and returns FAILED status (orchestrator.py lines 238-246).",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "11. Prompt loader/version manager must be isolated from translation logic",
+      "files": [
+        "app/translation/orchestrator.py",
+        "app/prompt_versioning/manager.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - PromptVersionManager is a separate module with no translation logic. TranslationOrchestrator uses it via dependency injection.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "12. Prompts must be retrieved via PromptVersionManager, not hardcoded",
+      "files": [
+        "app/translation/orchestrator.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - Prompts are loaded via self.prompt_manager.get_latest('code_translation') in _load_prompt_template() (lines 327-343).",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "13. System prompt and user prompt must be distinguishable",
+      "files": [
+        "app/translation/orchestrator.py"
+      ],
+      "severity": "MEDIUM",
+      "reason": "PARTIAL - Prompt template is loaded and formatted in _build_translation_prompt(), but there's no explicit separation between system prompt and user prompt. The template format is opaque.",
+      "refactor_plan": "Modify _build_translation_prompt() to return a structured prompt object with separate 'system' and 'user' fields. Update LLMClient interface to accept structured prompts."
+    },
+    {
+      "rule": "14. Prompt version must be logged with translation output",
+      "files": [
+        "app/translation/orchestrator.py",
+        "app/pipeline/service.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - Prompt version is retrieved via get_prompt_version() and stored in pipeline_result.prompt_versions (service.py lines 177-178). Logged in phase 5 completion (service.py line 191).",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "15. No business logic inside FastAPI routes",
+      "files": [
+        "app/api/routes.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - Routes delegate to PipelineService.execute_full_pipeline(). Only schema transformation and HTTP response handling in routes.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "16. Routes must call service layer only",
+      "files": [
+        "app/api/routes.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - /translate route calls pipeline_service.execute_full_pipeline() (line 149). All business logic is in service layer.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "17. No direct LLM calls from routes",
+      "files": [
+        "app/api/routes.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - No direct LLM client usage in routes. LLM calls are made through TranslationOrchestrator within PipelineService.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "18. No direct imports from ingestion or dependency_graph inside LLM interface",
+      "files": [
+        "app/llm/gemini_client.py",
+        "app/llm/client.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - No imports from app.ingestion or app.dependency_graph found in LLM layer.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "19. No bypass of ContextOptimizer",
+      "files": [
+        "app/translation/orchestrator.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - ContextOptimizer is always invoked in _translate_node() before LLM call (lines 217-237). No bypass paths detected.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "20. No hardcoded token limits in translation layer",
+      "files": [
+        "app/translation/orchestrator.py",
+        "app/context_optimizer/optimizer.py",
+        "app/core/config.py"
+      ],
+      "severity": "LOW",
+      "reason": "PASS - Token limits are loaded from Settings via get_settings() (config.py). MAX_TOKEN_LIMIT is configurable via environment variables. No hardcoded limits in translation or optimizer layers.",
+      "refactor_plan": "N/A"
+    },
+    {
+      "rule": "ADDITIONAL: LLMClient abstract interface not properly implemented",
+      "files": [
+        "app/llm/client.py",
+        "app/llm/gemini_client.py"
+      ],
+      "severity": "HIGH",
+      "reason": "GeminiClient does not inherit from LLMClient abstract base class. The abstract interface defines generate() and embed() methods, but GeminiClient implements a different signature (generate() with metadata parameter instead of temperature/max_tokens). This breaks the abstraction and makes it impossible to swap LLM providers.",
+      "refactor_plan": "Make GeminiClient inherit from LLMClient. Implement the abstract methods with correct signatures. Add an adapter layer if metadata needs to be passed. Ensure TranslationOrchestrator depends on LLMClient interface, not concrete GeminiClient."
+    },
+    {
+      "rule": "ADDITIONAL: TranslationOrchestrator depends on concrete LLMClient, not interface",
+      "files": [
+        "app/translation/orchestrator.py"
+      ],
+      "severity": "MEDIUM",
+      "reason": "TranslationOrchestrator accepts LLMClient in __init__ but calls generate() with parameters that don't match the abstract interface (temperature, max_tokens). The orchestrator is tightly coupled to the concrete implementation.",
+      "refactor_plan": "Update TranslationOrchestrator to use only the LLMClient abstract interface methods. Ensure all LLM calls go through the interface, not implementation-specific methods."
+    }
+  ],
+  "missing_components": [
+    "app/translation/llm_interface.py - No dedicated LLM interface module exists. GeminiClient serves as both interface and implementation."
+  ],
+  "api_boundary_issues": [
+    "GeminiClient does not implement LLMClient abstract interface, breaking abstraction and preventing provider swapping",
+    "System prompt and user prompt are not distinguishable in translation prompt construction",
+    "GeminiClient contains multiple responsibilities (caching, retry, token estimation) beyond pure API invocation"
+  ],
+  "token_integrity": {
+    "optimizer_enforced": "YES",
+    "token_tracking_present": "YES",
+    "hardcoded_limits_found": "NO"
+  }
+}
