@@ -10,9 +10,12 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ASTNode:
-    """Unified AST node schema for language-agnostic representation."""
+    """Unified AST node schema for language-agnostic representation.
+    
+    Immutable dataclass to ensure AST integrity throughout the pipeline.
+    """
     id: str
     name: str
     node_type: str

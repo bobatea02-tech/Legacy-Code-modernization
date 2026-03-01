@@ -1,6 +1,7 @@
 """Java language parser."""
 from typing import List
 from .base import BaseParser, ASTNode
+from .registry import register_parser
 import re
 
 from app.core.logging import get_logger
@@ -8,6 +9,7 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+@register_parser('java')
 class JavaParser(BaseParser):
     """Parser for Java source code with mock AST generation."""
     

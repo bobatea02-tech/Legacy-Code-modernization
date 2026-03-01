@@ -20,9 +20,8 @@ import asyncio
 import time
 
 from app.ingestion.ingestor import RepositoryIngestor, IngestionConfig, IngestionError
-from app.parsers.java_parser import JavaParser
-from app.parsers.cobol_parser import CobolParser
 from app.parsers.base import BaseParser
+from app.parsers.registry import get_registry
 from app.dependency_graph.graph_builder import GraphBuilder
 from app.context_optimizer.optimizer import ContextOptimizer
 from app.llm.gemini_client import GeminiClient
@@ -96,7 +95,7 @@ class PipelineService:
         logger.info("PipelineService initialized")
     
     def get_parser(self, language: str) -> BaseParser:
-        """Get parser for specified language.
+        """Get parser for specified language using registry.
         
         Args:
             language: Language identifier (java, cobol)
@@ -107,14 +106,11 @@ class PipelineService:
         Raises:
             ValueError: If language not supported
         """
-        language_lower = language.lower()
+        # Import parsers to trigger registration
+        from app.parsers import JavaParser, CobolParser
         
-        if language_lower == "java":
-            return JavaParser()
-        elif language_lower == "cobol":
-            return CobolParser()
-        else:
-            raise ValueError(f"Unsupported language: {language}")
+        registry = get_registry()
+        return registry.get_parser(language)
     
     async def execute_full_pipeline(
         self,

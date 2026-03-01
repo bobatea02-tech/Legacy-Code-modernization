@@ -14,7 +14,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Generator
 
 import chardet
 
@@ -289,7 +289,7 @@ class RepositoryIngestor:
         
         return file_metadata
     
-    def _walk_directory(self, root_dir: Path):
+    def _walk_directory(self, root_dir: Path) -> Generator[Path, None, None]:
         """Walk directory tree, yielding file paths while respecting ignore rules.
         
         Args:
