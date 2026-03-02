@@ -45,7 +45,7 @@
     },
     "demo_script": {
       "status": "CREATED",
-      "path": "demo.py",
+      "path": "scripts/demo.py",
       "features": [
         "Fixed sample dataset (java_small)",
         "Full pipeline execution",
@@ -65,7 +65,7 @@
     },
     "validation_script": {
       "status": "CREATED",
-      "path": "validate_demo.py",
+      "path": "scripts/validate_demo.py",
       "checks": [
         "Deterministic execution (hash comparison)",
         "Requirements installation",

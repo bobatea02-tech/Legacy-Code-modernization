@@ -3,8 +3,12 @@
 import pytest
 import json
 import asyncio
+import sys
 from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock
+
+# Add scripts directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from benchmark_runner import (
     compute_dataset_hash,

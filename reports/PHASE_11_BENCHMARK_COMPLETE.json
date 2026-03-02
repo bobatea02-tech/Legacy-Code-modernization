@@ -23,7 +23,7 @@
     },
     "benchmark_runner": {
       "status": "COMPLETE",
-      "path": "benchmark_runner.py",
+      "path": "scripts/benchmark_runner.py",
       "architecture": "PipelineService-only (no adapter calls)",
       "features": [
         "Fixed dataset loading",
@@ -216,7 +216,7 @@
   },
   "files_created": [
     "benchmark_config.json",
-    "benchmark_runner.py",
+    "scripts/benchmark_runner.py",
     "tests/test_benchmark.py"
   ],
   "acceptance_criteria": {
@@ -232,7 +232,7 @@
       "LLM_API_KEY set in .env",
       "sample_repos/java_small.zip exists"
     ],
-    "command": "python benchmark_runner.py",
+    "command": "python scripts/benchmark_runner.py",
     "expected_output": [
       "benchmark_output/benchmark_report.json",
       "benchmark_output/benchmark_summary.json"
@@ -265,7 +265,7 @@
   "next_steps": [
     "Set DETERMINISTIC_MODE=true in .env",
     "Set LLM_API_KEY in .env",
-    "Run: python benchmark_runner.py",
+    "Run: python scripts/benchmark_runner.py",
     "Verify: deterministic_hash_match = true",
     "Review: benchmark_output/benchmark_report.json",
     "Document: Add benchmark results to portfolio"

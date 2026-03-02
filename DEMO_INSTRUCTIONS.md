@@ -24,7 +24,7 @@ DETERMINISTIC_MODE=true
 ### 3. Run Demo
 
 ```bash
-python demo.py
+python scripts/demo.py
 ```
 
 Expected output:
@@ -37,15 +37,15 @@ Expected output:
 Run demo twice and compare hashes:
 
 ```bash
-python demo.py  # Note the output hash
+python scripts/demo.py  # Note the output hash
 rm -rf demo_output
-python demo.py  # Hash should be identical
+python scripts/demo.py  # Hash should be identical
 ```
 
 Or use the validation script:
 
 ```bash
-python validate_demo.py
+python scripts/validate_demo.py
 ```
 
 ## Demo Features
@@ -140,7 +140,7 @@ pytest tests/test_provider_swap.py tests/test_cli_api_consistency.py -v
 ### Validate Demo Readiness
 
 ```bash
-python validate_demo.py
+python scripts/validate_demo.py
 ```
 
 Expected output:
