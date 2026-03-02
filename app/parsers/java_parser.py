@@ -53,7 +53,7 @@ class JavaParser(BaseParser):
                 start_line = content[:match.start()].count('\n') + 1
                 
                 node = ASTNode(
-                    id=f"{file_path}::{class_name}",
+                    id=f"{file_path}:{class_name}:{start_line}",
                     name=class_name,
                     node_type="class",
                     parameters=[],
@@ -79,7 +79,7 @@ class JavaParser(BaseParser):
                 param_list = [p.strip() for p in params.split(',') if p.strip()]
                 
                 node = ASTNode(
-                    id=f"{file_path}::{method_name}",
+                    id=f"{file_path}:{method_name}:{start_line}",
                     name=method_name,
                     node_type="method",
                     parameters=param_list,

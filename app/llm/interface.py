@@ -36,7 +36,8 @@ class LLMClient(ABC):
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        force_json: bool = False
     ) -> LLMResponse:
         """Generate completion from LLM.
         
@@ -45,6 +46,7 @@ class LLMClient(ABC):
             user_prompt: User input/query
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature (0.0 to 1.0)
+            force_json: If True, force JSON output mode (optional)
             
         Returns:
             LLMResponse with generated text and metadata

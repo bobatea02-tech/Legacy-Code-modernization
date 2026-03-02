@@ -121,7 +121,8 @@ class EvaluationReport:
         quality_metrics: Quality signal metrics
         summary_text: Human-readable summary
         timestamp: Report generation timestamp (ISO format)
-        prompt_versions: Dictionary of prompt_name -> version used
+        prompt_versions: Dictionary of prompt_name -> version used (deprecated, use prompt_metadata)
+        prompt_metadata: Dictionary of prompt_name -> {version, checksum, model_name}
     """
     repo_id: str
     token_metrics: TokenMetrics
@@ -130,6 +131,7 @@ class EvaluationReport:
     summary_text: str
     timestamp: str
     prompt_versions: Dict[str, str] = field(default_factory=dict)
+    prompt_metadata: Dict[str, Dict[str, str]] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization.
@@ -144,7 +146,8 @@ class EvaluationReport:
             "quality_metrics": self.quality_metrics.to_dict(),
             "summary_text": self.summary_text,
             "timestamp": self.timestamp,
-            "prompt_versions": self.prompt_versions
+            "prompt_versions": self.prompt_versions,
+            "prompt_metadata": self.prompt_metadata
         }
 
 
@@ -190,8 +193,11 @@ class PipelineEvaluator:
             quality_metrics
         )
         
-        # Extract prompt versions from metadata
+        # Extract prompt versions from metadata (legacy format)
         prompt_versions = evaluation_input.phase_metadata.get("prompt_versions", {})
+        
+        # Extract prompt metadata (new format with checksum and model_name)
+        prompt_metadata = evaluation_input.phase_metadata.get("prompt_metadata", {})
         
         # Create report
         report = EvaluationReport(
@@ -201,7 +207,8 @@ class PipelineEvaluator:
             quality_metrics=quality_metrics,
             summary_text=summary_text,
             timestamp=datetime.now(timezone.utc).isoformat(),
-            prompt_versions=prompt_versions
+            prompt_versions=prompt_versions,
+            prompt_metadata=prompt_metadata
         )
         
         logger.info(
@@ -211,7 +218,7 @@ class PipelineEvaluator:
                 "efficiency_score": token_metrics.efficiency_score,
                 "total_runtime": runtime_metrics.total_runtime_seconds,
                 "validation_pass_rate": quality_metrics.validation_pass_rate,
-                "prompt_versions": prompt_versions
+                "prompt_metadata": prompt_metadata
             }
         )
         

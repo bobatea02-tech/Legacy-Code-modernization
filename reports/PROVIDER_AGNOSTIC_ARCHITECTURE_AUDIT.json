@@ -1,0 +1,332 @@
+{
+  "status": "FAIL",
+  "audit_timestamp": "2026-03-02",
+  "summary": "Architecture is mostly provider-agnostic but has critical violations in wiring layer that prevent true provider swappability without code changes.",
+  
+  "provider_leakages": [
+    {
+      "violation_type": "HARDCODED_PROVIDER_IMPORT",
+      "severity": "CRITICAL",
+      "file": "app/pipeline/service.py",
+      "line": 28,
+      "code": "from app.llm.gemini_client import GeminiClient",
+      "description": "PipelineService directly imports GeminiClient instead of using dependency injection",
+      "impact": "Swapping providers requires modifying PipelineService code"
+    },
+    {
+      "violation_type": "HARDCODED_PROVIDER_INSTANTIATION",
+      "severity": "CRITICAL",
+      "file": "app/pipeline/service.py",
+      "line": 95,
+      "code": "llm_client = GeminiClient()",
+      "description": "PipelineService directly instantiates GeminiClient in __init__",
+      "impact": "Cannot swap provider without changing PipelineService implementation"
+    },
+    {
+      "violation_type": "HARDCODED_PROVIDER_IMPORT",
+      "severity": "CRITICAL",
+      "file": "app/api/dependencies.py",
+      "line": 15,
+      "code": "from app.llm.gemini_client import GeminiClient",
+      "description": "API dependencies directly import GeminiClient",
+      "impact": "API layer coupled to Gemini provider"
+    },
+    {
+      "violation_type": "HARDCODED_PROVIDER_INSTANTIATION",
+      "severity": "CRITICAL",
+      "file": "app/api/dependencies.py",
+      "line": 69,
+      "code": "llm_client = GeminiClient()",
+      "description": "get_llm_service() directly instantiates GeminiClient",
+      "impact": "Cannot swap provider without changing dependency injection code"
+    },
+    {
+      "violation_type": "HARDCODED_PROVIDER_IMPORT",
+      "severity": "CRITICAL",
+      "file": "app/cli/cli.py",
+      "line": 31,
+      "code": "from app.llm.gemini_client import GeminiClient",
+      "description": "CLI directly imports GeminiClient",
+      "impact": "CLI layer coupled to Gemini provider"
+    },
+    {
+      "violation_type": "HARDCODED_MODEL_NAME",
+      "severity": "MEDIUM",
+      "file": "app/core/config.py",
+      "line": 54,
+      "code": "default=\"gemini-1.5-flash\"",
+      "description": "Default model name is provider-specific",
+      "impact": "Config defaults assume Gemini provider"
+    },
+    {
+      "violation_type": "PROVIDER_SPECIFIC_CONFIG_KEY",
+      "severity": "LOW",
+      "file": "app/core/config.py",
+      "line": 21,
+      "code": "GEMINI_API_KEY: str = Field(..., description=\"Google Gemini API key\")",
+      "description": "Config uses provider-specific key name instead of generic LLM_API_KEY",
+      "impact": "Config schema is provider-specific, requires changes for different providers"
+    }
+  ],
+  
+  "swap_test": {
+    "dummy_provider_exists": true,
+    "dummy_provider_location": "tests/test_llm_interface_compliance.py",
+    "dummy_provider_class": "MockLLMClient",
+    "pipeline_runs_with_dummy": true,
+    "pipeline_test_location": "tests/test_llm_interface_compliance.py::test_orchestrator_works_with_mock_client",
+    "code_changes_required": true,
+    "required_changes": [
+      "Modify app/pipeline/service.py to accept LLMClient via dependency injection",
+      "Modify app/api/dependencies.py to use factory pattern for provider selection",
+      "Modify app/cli/cli.py to use dependency injection instead of direct instantiation",
+      "Add provider selection mechanism in config (e.g., LLM_PROVIDER=gemini|openai|mock)"
+    ]
+  },
+  
+  "architecture_checks": {
+    "llm_interface_clean": {
+      "status": "PASS",
+      "details": "LLMClient interface is properly abstracted with no provider-specific logic",
+      "evidence": [
+        "app/llm/interface.py defines abstract LLMClient with generate() and embed() methods",
+        "Interface uses generic LLMResponse dataclass",
+        "No provider-specific types or imports in interface"
+      ]
+    },
+    
+    "adapter_isolated": {
+      "status": "PASS",
+      "details": "GeminiClient adapter contains ONLY API communication logic",
+      "evidence": [
+        "No caching logic in gemini_client.py",
+        "No retry logic in gemini_client.py",
+        "No token estimation in gemini_client.py",
+        "No response parsing in gemini_client.py",
+        "No prompt construction in gemini_client.py",
+        "Only API calls via google.generativeai library"
+      ]
+    },
+    
+    "external_services_separated": {
+      "status": "PASS",
+      "details": "All cross-cutting concerns are external to provider adapter",
+      "evidence": [
+        "CacheService exists in app/core/cache_service.py",
+        "RetryPolicy exists in app/core/retry_policy.py",
+        "TokenEstimator exists in app/context_optimizer/token_estimator.py",
+        "ResponseParser exists in app/llm/response_parser.py",
+        "LLMService wraps LLMClient with caching and retry"
+      ]
+    },
+    
+    "pipeline_provider_agnostic": {
+      "status": "FAIL",
+      "details": "Pipeline logic is provider-agnostic BUT wiring layer is not",
+      "evidence": [
+        "TranslationOrchestrator uses LLMService (generic) - GOOD",
+        "TranslationOrchestrator has no direct GeminiClient imports - GOOD",
+        "PipelineService directly instantiates GeminiClient - BAD",
+        "API dependencies directly instantiate GeminiClient - BAD",
+        "CLI directly imports GeminiClient - BAD"
+      ]
+    },
+    
+    "config_injection_correct": {
+      "status": "PARTIAL",
+      "details": "Config supports injection but uses provider-specific keys",
+      "evidence": [
+        "Model name is configurable via LLM_MODEL_NAME - GOOD",
+        "API key only in config, not in code - GOOD",
+        "Config uses GEMINI_API_KEY instead of generic LLM_API_KEY - BAD",
+        "No provider selection mechanism in config - BAD",
+        "Default model name is provider-specific - MEDIUM"
+      ]
+    }
+  },
+  
+  "detailed_findings": {
+    "interface_integrity": {
+      "abstract_interface_exists": true,
+      "interface_file": "app/llm/interface.py",
+      "interface_methods": ["generate", "embed"],
+      "interface_has_provider_logic": false,
+      "interface_rating": "EXCELLENT"
+    },
+    
+    "adapter_isolation": {
+      "adapter_file": "app/llm/gemini_client.py",
+      "adapter_class": "GeminiClient",
+      "implements_interface": true,
+      "contains_only_api_calls": true,
+      "external_dependencies": ["google.generativeai"],
+      "has_caching": false,
+      "has_retry": false,
+      "has_token_estimation": false,
+      "has_response_parsing": false,
+      "adapter_rating": "EXCELLENT"
+    },
+    
+    "service_layer": {
+      "service_file": "app/llm/llm_service.py",
+      "service_class": "LLMService",
+      "wraps_interface": true,
+      "provides_caching": true,
+      "provides_retry": true,
+      "accepts_any_llm_client": true,
+      "service_rating": "EXCELLENT"
+    },
+    
+    "wiring_layer": {
+      "pipeline_service": {
+        "file": "app/pipeline/service.py",
+        "uses_dependency_injection": false,
+        "hardcodes_provider": true,
+        "rating": "POOR"
+      },
+      "api_dependencies": {
+        "file": "app/api/dependencies.py",
+        "uses_dependency_injection": false,
+        "hardcodes_provider": true,
+        "rating": "POOR"
+      },
+      "cli": {
+        "file": "app/cli/cli.py",
+        "uses_dependency_injection": false,
+        "hardcodes_provider": true,
+        "rating": "POOR"
+      }
+    },
+    
+    "orchestrator_layer": {
+      "file": "app/translation/orchestrator.py",
+      "class": "TranslationOrchestrator",
+      "imports_llm_service": true,
+      "imports_gemini_client": false,
+      "uses_interface": true,
+      "rating": "EXCELLENT"
+    }
+  },
+  
+  "security_audit": {
+    "api_keys_in_code": false,
+    "api_keys_in_config_only": true,
+    "secrets_exposed": false,
+    "rating": "PASS"
+  },
+  
+  "recommendations": {
+    "critical": [
+      {
+        "priority": 1,
+        "recommendation": "Add LLM_PROVIDER config key to select provider (gemini|openai|mock)",
+        "rationale": "Enable provider selection without code changes",
+        "implementation": "Add LLM_PROVIDER: str = Field(default='gemini') to Settings class"
+      },
+      {
+        "priority": 2,
+        "recommendation": "Create LLMClientFactory to instantiate providers based on config",
+        "rationale": "Centralize provider instantiation logic",
+        "implementation": "Create app/llm/factory.py with get_llm_client(provider: str) -> LLMClient"
+      },
+      {
+        "priority": 3,
+        "recommendation": "Modify PipelineService to accept LLMClient via constructor",
+        "rationale": "Enable dependency injection for testing and swapping",
+        "implementation": "Change __init__(self, llm_client: Optional[LLMClient] = None)"
+      },
+      {
+        "priority": 4,
+        "recommendation": "Update API dependencies to use factory pattern",
+        "rationale": "Decouple API layer from specific provider",
+        "implementation": "Change get_llm_service() to use LLMClientFactory"
+      }
+    ],
+    
+    "medium": [
+      {
+        "recommendation": "Rename GEMINI_API_KEY to LLM_API_KEY in config",
+        "rationale": "Make config schema provider-agnostic",
+        "implementation": "Update Settings class and .env.example"
+      },
+      {
+        "recommendation": "Make LLM_MODEL_NAME default value provider-agnostic",
+        "rationale": "Avoid provider-specific defaults",
+        "implementation": "Use empty string or 'default' as default value"
+      }
+    ],
+    
+    "low": [
+      {
+        "recommendation": "Add provider validation in config",
+        "rationale": "Fail fast if unsupported provider specified",
+        "implementation": "Add @field_validator for LLM_PROVIDER"
+      },
+      {
+        "recommendation": "Document provider swapping process",
+        "rationale": "Help users understand how to add new providers",
+        "implementation": "Create docs/ADDING_LLM_PROVIDERS.md"
+      }
+    ]
+  },
+  
+  "example_fix": {
+    "description": "Example implementation of provider-agnostic wiring",
+    "files_to_create": [
+      {
+        "file": "app/llm/factory.py",
+        "content": "def get_llm_client(provider: str = None) -> LLMClient:\n    settings = get_settings()\n    provider = provider or settings.LLM_PROVIDER\n    \n    if provider == 'gemini':\n        from app.llm.gemini_client import GeminiClient\n        return GeminiClient()\n    elif provider == 'mock':\n        from tests.test_llm_interface_compliance import MockLLMClient\n        return MockLLMClient()\n    else:\n        raise ValueError(f'Unsupported provider: {provider}')"
+      }
+    ],
+    "files_to_modify": [
+      {
+        "file": "app/core/config.py",
+        "change": "Add: LLM_PROVIDER: str = Field(default='gemini', description='LLM provider (gemini|openai|mock)')"
+      },
+      {
+        "file": "app/pipeline/service.py",
+        "change": "Replace: llm_client = GeminiClient()\nWith: from app.llm.factory import get_llm_client\n      llm_client = get_llm_client()"
+      },
+      {
+        "file": "app/api/dependencies.py",
+        "change": "Replace: llm_client = GeminiClient()\nWith: from app.llm.factory import get_llm_client\n      llm_client = get_llm_client()"
+      }
+    ]
+  },
+  
+  "test_coverage": {
+    "interface_compliance_tests_exist": true,
+    "mock_client_exists": true,
+    "orchestrator_swap_test_exists": true,
+    "pipeline_swap_test_exists": false,
+    "test_files": [
+      "tests/test_llm_interface_compliance.py",
+      "tests/test_orchestrator.py"
+    ]
+  },
+  
+  "conclusion": {
+    "architecture_quality": "GOOD",
+    "swappability_without_code_changes": false,
+    "swappability_with_minimal_changes": true,
+    "estimated_effort_to_fix": "2-4 hours",
+    "blocking_issues": [
+      "Hardcoded GeminiClient instantiation in PipelineService",
+      "Hardcoded GeminiClient instantiation in API dependencies",
+      "No provider selection mechanism in config"
+    ],
+    "strengths": [
+      "Clean LLMClient interface abstraction",
+      "Excellent adapter isolation (no business logic in GeminiClient)",
+      "External services properly separated (cache, retry, token estimation)",
+      "TranslationOrchestrator is fully provider-agnostic",
+      "Mock client exists and works with orchestrator"
+    ],
+    "weaknesses": [
+      "Wiring layer hardcodes provider selection",
+      "No factory pattern for provider instantiation",
+      "Config uses provider-specific key names",
+      "No provider selection mechanism"
+    ]
+  }
+}

@@ -78,8 +78,9 @@ class GraphBuilder:
         """
         for ast_node in ast_nodes:
             try:
-                # Generate globally unique node ID
-                node_id = self._generate_node_id(ast_node)
+                # CRITICAL: Use AST node ID directly - SINGLE SOURCE OF TRUTH
+                # Do NOT generate new IDs - parsers assign node_id when AST created
+                node_id = ast_node.id
                 
                 # Add node with attributes
                 self.graph.add_node(
@@ -118,7 +119,8 @@ class GraphBuilder:
         
         for ast_node in ast_nodes:
             try:
-                source_id = self._generate_node_id(ast_node)
+                # CRITICAL: Use AST node ID directly - SINGLE SOURCE OF TRUTH
+                source_id = ast_node.id
                 
                 # Skip if source node wasn't added
                 if source_id not in self.graph:
@@ -185,13 +187,16 @@ class GraphBuilder:
     def _generate_node_id(self, ast_node: ASTNode) -> str:
         """Generate globally unique node ID.
         
+        DEPRECATED: This method now simply returns ast_node.id.
+        Node IDs are assigned by parsers as the SINGLE SOURCE OF TRUTH.
+        
         Args:
             ast_node: ASTNode object
             
         Returns:
-            Unique node ID in format "{file_path}:{name}:{start_line}"
+            Node ID from ast_node.id
         """
-        return f"{ast_node.file_path}:{ast_node.name}:{ast_node.start_line}"
+        return ast_node.id
     
     def _detect_cycles(self) -> None:
         """Detect and log cycles in the dependency graph.

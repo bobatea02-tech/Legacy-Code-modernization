@@ -55,3 +55,9 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+temp_repos/
+.temp_test/
+
+# Reports (generated)
+# reports/*.json
+# reports/*.md

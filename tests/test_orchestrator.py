@@ -12,7 +12,7 @@ from app.translation.orchestrator import (
 )
 from app.parsers.base import ASTNode
 from app.llm.client import LLMClient
-from app.validation.validator import CodeValidator, ValidationResult, ValidationLevel
+from app.validation.validator import ValidationEngine, ValidationReport
 
 
 class MockLLMClient(LLMClient):
@@ -36,8 +36,17 @@ def mock_llm_client():
 @pytest.fixture
 def mock_validator():
     """Create mock validator."""
-    validator = MagicMock(spec=CodeValidator)
-    validator.validate_syntax.return_value = []
+    validator = MagicMock(spec=ValidationEngine)
+    # Mock validate_translation to return a passing ValidationReport
+    validator.validate_translation.return_value = ValidationReport(
+        structure_valid=True,
+        symbols_preserved=True,
+        syntax_valid=True,
+        dependencies_complete=True,
+        missing_dependencies=[],
+        unit_test_stub="",
+        errors=[]
+    )
     return validator
 
 
@@ -240,14 +249,16 @@ class TestTranslationOrchestrator:
     ):
         """Test handling of validation failures."""
         # Create validator that returns errors
-        validator = MagicMock(spec=CodeValidator)
-        validator.validate_syntax.return_value = [
-            ValidationResult(
-                level=ValidationLevel.ERROR,
-                message="Syntax error",
-                location="line 1"
-            )
-        ]
+        validator = MagicMock(spec=ValidationEngine)
+        validator.validate_translation.return_value = ValidationReport(
+            structure_valid=False,
+            symbols_preserved=False,
+            syntax_valid=False,
+            dependencies_complete=False,
+            missing_dependencies=["missing_func"],
+            unit_test_stub="",
+            errors=["Syntax error at line 1"]
+        )
         
         orchestrator = TranslationOrchestrator(
             llm_client=mock_llm_client,

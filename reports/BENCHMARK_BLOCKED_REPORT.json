@@ -1,0 +1,127 @@
+{
+  "status": "BLOCKED",
+  "timestamp": "2026-03-01T21:00:43Z",
+  "blocker_type": "API_CONFIGURATION_ERROR",
+  "summary": "Benchmark execution blocked by Gemini API model configuration error",
+  "details": {
+    "error_message": "404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent",
+    "configured_model": "gemini-1.5-pro",
+    "expected_model": "gemini-1.5-flash",
+    "configuration_file": ".env",
+    "configuration_line": "LLM_MODEL_NAME=gemini-1.5-pro"
+  },
+  "impact": {
+    "pipeline_phases_affected": [
+      "Phase 5: Translation (all LLM calls failed)"
+    ],
+    "modules_attempted": {
+      "java_small": 0,
+      "cobol_small": 29
+    },
+    "modules_translated": 0,
+    "translation_failures": 29,
+    "validation_skipped": true,
+    "documentation_skipped": true
+  },
+  "datasets_status": {
+    "available": [
+      {
+        "name": "java_small",
+        "path": "sample_repos/java_small.zip",
+        "files_count": 6,
+        "status": "READY"
+      },
+      {
+        "name": "cobol_small",
+        "path": "sample_repos/cobol_small.zip",
+        "files_count": 5,
+        "status": "READY"
+      }
+    ],
+    "missing": [
+      {
+        "name": "sample_cross_dependency_repo",
+        "status": "NOT_FOUND",
+        "note": "Dataset does not exist in sample_repos directory"
+      }
+    ]
+  },
+  "benchmark_execution": {
+    "started": true,
+    "completed": true,
+    "pipeline_phases_executed": [
+      "Phase 1: Ingestion (SUCCESS)",
+      "Phase 2: AST Parsing (SUCCESS)",
+      "Phase 3: Dependency Graph (SUCCESS)",
+      "Phase 4: Context Optimization (IMPLICIT)",
+      "Phase 5: Translation (FAILED - API Error)",
+      "Phase 6: Validation (SKIPPED - No translations)",
+      "Phase 7: Documentation (SKIPPED - No translations)",
+      "Phase 8: Audit (SUCCESS)",
+      "Phase 9: Evaluation (SUCCESS)"
+    ],
+    "total_runtime_seconds": 220.45,
+    "repos_processed": 2
+  },
+  "resolution_required": {
+    "action": "UPDATE_ENV_CONFIGURATION",
+    "steps": [
+      "1. Open .env file",
+      "2. Change line: LLM_MODEL_NAME=gemini-1.5-pro",
+      "3. To: LLM_MODEL_NAME=gemini-1.5-flash",
+      "4. Save file",
+      "5. Re-run benchmark"
+    ],
+    "alternative_solution": "Verify Gemini API access and available models for the configured API key"
+  },
+  "partial_metrics_collected": {
+    "repo_metrics": {
+      "java_small": {
+        "files_count": 6,
+        "ast_nodes_parsed": 0,
+        "graph_nodes": 0,
+        "graph_edges": 0
+      },
+      "cobol_small": {
+        "files_count": 5,
+        "ast_nodes_parsed": 29,
+        "graph_nodes": 29,
+        "graph_edges": 0
+      }
+    },
+    "token_metrics": {
+      "naive_tokens": 0,
+      "optimized_tokens": 0,
+      "reduction_percent": "N/A - No translations completed"
+    },
+    "runtime_metrics": {
+      "java_small_runtime_seconds": 119.83,
+      "cobol_small_runtime_seconds": 100.62,
+      "total_runtime_seconds": 220.45
+    },
+    "validation_metrics": {
+      "validation_errors": 0,
+      "dependency_missing_count": 0,
+      "syntax_failures": 0,
+      "note": "No validations performed due to translation failures"
+    },
+    "traceability": {
+      "prompt_version": "1.0.0",
+      "prompt_checksum": "unknown",
+      "model_name_configured": "gemini-1.5-pro",
+      "model_name_expected": "gemini-1.5-flash"
+    }
+  },
+  "recommendations": [
+    "Fix .env configuration to use gemini-1.5-flash model",
+    "Verify Gemini API key has access to required models",
+    "Consider adding model validation at pipeline startup",
+    "Add pre-flight checks for API connectivity before running benchmarks"
+  ],
+  "next_steps": [
+    "1. Update .env file with correct model name",
+    "2. Verify API key permissions",
+    "3. Re-run benchmark with: python benchmark_runner.py",
+    "4. Verify BenchmarkReport.json contains successful translations"
+  ]
+}

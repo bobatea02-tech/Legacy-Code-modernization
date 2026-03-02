@@ -76,7 +76,8 @@ class LLMService:
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        force_json: bool = False
     ) -> LLMResponse:
         """Generate completion with caching and retry.
         
@@ -85,6 +86,7 @@ class LLMService:
             user_prompt: User input/query
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
+            force_json: If True, force JSON output mode
             
         Returns:
             LLMResponse with generated text and metadata
@@ -115,7 +117,8 @@ class LLMService:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=max_tokens,
-            temperature=temperature
+            temperature=temperature,
+            force_json=force_json
         )
         
         # Cache response

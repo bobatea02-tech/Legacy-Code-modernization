@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # Required settings
-    GEMINI_API_KEY: str = Field(..., description="Google Gemini API key")
+    LLM_API_KEY: str = Field(..., description="LLM provider API key")
 
     # Optional settings with defaults
     MAX_TOKEN_LIMIT: int = Field(
@@ -50,9 +50,14 @@ class Settings(BaseSettings):
         description="Maximum file size for parsing in MB",
     )
 
+    LLM_PROVIDER: str = Field(
+        default="gemini",
+        description="LLM provider to use (gemini, mock)",
+    )
+
     LLM_MODEL_NAME: str = Field(
         default="gemini-1.5-flash",
-        description="Gemini model name to use",
+        description="Model name to use for the selected provider",
     )
 
     LLM_RETRY_COUNT: int = Field(
@@ -73,13 +78,24 @@ class Settings(BaseSettings):
         description="Temporary directory for repository processing",
     )
 
-    @field_validator("GEMINI_API_KEY")
+    @field_validator("LLM_API_KEY")
     @classmethod
     def validate_api_key(cls, v: str) -> str:
         """Validate API key is not empty."""
         if not v or not v.strip():
-            raise ValueError("GEMINI_API_KEY cannot be empty")
+            raise ValueError("LLM_API_KEY cannot be empty")
         return v.strip()
+    
+    @field_validator("LLM_PROVIDER")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        """Validate provider is supported."""
+        supported = ["gemini", "mock"]
+        if v not in supported:
+            raise ValueError(
+                f"LLM_PROVIDER must be one of {supported}, got: {v}"
+            )
+        return v
 
     @field_validator("LOG_LEVEL", mode="before")
     @classmethod

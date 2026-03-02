@@ -24,3 +24,8 @@ class GeminiRequestError(LLMError):
 class RateLimitError(LLMError):
     """Raised when API rate limit is hit."""
     pass
+
+
+class StructuredLLMError(LLMError):
+    """Raised when LLM response doesn't match expected schema."""
+    pass

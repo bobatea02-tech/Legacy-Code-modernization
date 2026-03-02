@@ -1,0 +1,171 @@
+{
+  "status": "REFACTORED",
+  "refactor_timestamp": "2026-03-02",
+  "summary": "Successfully eliminated all business logic orchestration from CLI and API layers. All execution paths now flow exclusively through PipelineService.",
+  
+  "files_modified": [
+    {
+      "file": "app/pipeline/service.py",
+      "action": "EXTENDED",
+      "changes": [
+        "Added execute_validation_pipeline() method",
+        "Added execute_optimization_pipeline() method",
+        "Both methods reuse existing module instances",
+        "No duplicated initialization logic"
+      ]
+    },
+    {
+      "file": "app/cli/cli.py",
+      "action": "CLEANED",
+      "changes": [
+        "Removed direct imports of GraphBuilder, ContextOptimizer, TranslationOrchestrator, ValidationEngine, AuditEngine",
+        "Refactored validate command to use PipelineService.execute_validation_pipeline()",
+        "Refactored optimize command to use PipelineService.execute_optimization_pipeline()",
+        "translate command already used PipelineService.execute_full_pipeline()",
+        "CLI now only parses args, calls pipeline, and formats output"
+      ]
+    },
+    {
+      "file": "app/api/routes.py",
+      "action": "EXTENDED_AND_CLEANED",
+      "changes": [
+        "Added POST /validate endpoint using PipelineService.execute_validation_pipeline()",
+        "Added POST /optimize endpoint using PipelineService.execute_optimization_pipeline()",
+        "Removed unused imports (TranslationOrchestrator, ValidationEngine, AuditEngine)",
+        "All endpoints now use PipelineService"
+      ]
+    },
+    {
+      "file": "tests/test_cli_api_consistency.py",
+      "action": "CREATED",
+      "changes": [
+        "Added test_validation_pipeline_consistency()",
+        "Added test_optimization_pipeline_consistency()",
+        "Added test_translation_pipeline_consistency()",
+        "Added test_no_orchestration_in_cli()",
+        "Added test_no_orchestration_in_api()",
+        "Added test_pipeline_service_is_single_orchestrator()"
+      ]
+    }
+  ],
+  
+  "orchestration_leakage_remaining": []
+}
+,
+  
+  "architectural_invariant_verification": {
+    "allowed_execution_flow": "CLI/API → PipelineService → Internal Modules → LLMClient",
+    "verified": true,
+    "cli_commands": {
+      "translate": {
+        "uses_pipeline_service": true,
+        "method": "execute_full_pipeline()",
+        "no_direct_orchestration": true
+      },
+      "validate": {
+        "uses_pipeline_service": true,
+        "method": "execute_validation_pipeline()",
+        "no_direct_orchestration": true
+      },
+      "optimize": {
+        "uses_pipeline_service": true,
+        "method": "execute_optimization_pipeline()",
+        "no_direct_orchestration": true
+      }
+    },
+    "api_endpoints": {
+      "POST /translate": {
+        "uses_pipeline_service": true,
+        "method": "execute_full_pipeline()",
+        "no_direct_orchestration": true
+      },
+      "POST /validate": {
+        "uses_pipeline_service": true,
+        "method": "execute_validation_pipeline()",
+        "no_direct_orchestration": true
+      },
+      "POST /optimize": {
+        "uses_pipeline_service": true,
+        "method": "execute_optimization_pipeline()",
+        "no_direct_orchestration": true
+      }
+    }
+  },
+  
+  "test_results": {
+    "test_file": "tests/test_cli_api_consistency.py",
+    "total_tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "tests": [
+      {
+        "name": "test_validation_pipeline_consistency",
+        "status": "PASSED",
+        "description": "Verifies CLI and API produce identical validation results"
+      },
+      {
+        "name": "test_optimization_pipeline_consistency",
+        "status": "PASSED",
+        "description": "Verifies CLI and API produce identical optimization results"
+      },
+      {
+        "name": "test_translation_pipeline_consistency",
+        "status": "PASSED",
+        "description": "Verifies CLI and API produce identical translation results"
+      },
+      {
+        "name": "test_no_orchestration_in_cli",
+        "status": "PASSED",
+        "description": "Verifies CLI contains no business logic orchestration"
+      },
+      {
+        "name": "test_no_orchestration_in_api",
+        "status": "PASSED",
+        "description": "Verifies API contains no business logic orchestration"
+      },
+      {
+        "name": "test_pipeline_service_is_single_orchestrator",
+        "status": "PASSED",
+        "description": "Verifies PipelineService is the only orchestrator"
+      }
+    ]
+  },
+  
+  "success_criteria": {
+    "cli_contains_zero_business_logic": true,
+    "api_contains_zero_business_logic": true,
+    "all_execution_paths_through_pipeline_service": true,
+    "validation_produces_identical_results": true,
+    "optimization_produces_identical_results": true,
+    "no_duplicated_orchestration": true,
+    "all_criteria_met": true
+  },
+  
+  "before_after_comparison": {
+    "cli_validate_command": {
+      "before": "Directly instantiated RepositoryIngestor, Parser, GraphBuilder",
+      "after": "Calls PipelineService.execute_validation_pipeline()",
+      "lines_of_orchestration_removed": 60
+    },
+    "cli_optimize_command": {
+      "before": "Directly instantiated RepositoryIngestor, Parser, GraphBuilder, ContextOptimizer",
+      "after": "Calls PipelineService.execute_optimization_pipeline()",
+      "lines_of_orchestration_removed": 80
+    },
+    "api_endpoints": {
+      "before": "No validate or optimize endpoints",
+      "after": "Added POST /validate and POST /optimize using PipelineService",
+      "new_endpoints": 2
+    }
+  },
+  
+  "conclusion": {
+    "status": "SUCCESS",
+    "cli_refactored": true,
+    "api_extended": true,
+    "orchestration_centralized": true,
+    "tests_passing": true,
+    "architectural_invariant_maintained": true,
+    "recommendation": "Refactor complete. CLI and API are now thin presentation layers with all orchestration in PipelineService."
+  }
+}

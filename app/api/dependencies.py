@@ -12,7 +12,7 @@ from app.parsers.java_parser import JavaParser
 from app.parsers.cobol_parser import CobolParser
 from app.dependency_graph.graph_builder import GraphBuilder
 from app.context_optimizer.optimizer import ContextOptimizer
-from app.llm.gemini_client import GeminiClient
+from app.llm.factory import get_llm_client
 from app.llm.llm_service import LLMService
 from app.translation.orchestrator import TranslationOrchestrator, TranslationStore
 from app.validation import ValidationEngine
@@ -66,7 +66,7 @@ def get_llm_service() -> LLMService:
     Returns:
         LLMService instance
     """
-    llm_client = GeminiClient()
+    llm_client = get_llm_client()
     return LLMService(llm_client)
 
 

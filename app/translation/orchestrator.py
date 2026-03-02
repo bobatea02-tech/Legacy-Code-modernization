@@ -13,6 +13,9 @@ import networkx as nx
 
 from app.context_optimizer.optimizer import ContextOptimizer
 from app.llm.llm_service import LLMService
+from app.llm.response_parser import parse_llm_json
+from app.llm.response_schema import TranslationLLMOutput
+from app.llm.exceptions import StructuredLLMError
 from app.parsers.base import ASTNode
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -278,6 +281,9 @@ class TranslationOrchestrator:
                 errors=[error_msg]
             )
         
+        # ASSERTION: Verify node_id consistency between graph and AST index
+        assert node_id in ast_index, f"Node ID mismatch: {node_id} not in AST index"
+        
         ast_node = ast_index[node_id]
         
         # Calculate source hash for caching
@@ -339,10 +345,48 @@ class TranslationOrchestrator:
                 system_prompt=prompt_bundle.system_prompt,
                 user_prompt=prompt_bundle.user_prompt,
                 max_tokens=self.settings.MAX_TOKEN_LIMIT,
-                temperature=0.3  # Lower temperature for more deterministic translation
+                temperature=0.3,  # Lower temperature for more deterministic translation
+                force_json=False  # Disable JSON mode for now - prompt enforces JSON
             )
             
-            translated_code = response.text
+            # Parse and validate JSON response
+            try:
+                parsed_json = parse_llm_json(
+                    raw_response=response.text,
+                    node_id=node_id,
+                    model_name=response.model_name,
+                    prompt_version=prompt_bundle.version
+                )
+                
+                # Validate against schema
+                llm_output = TranslationLLMOutput.from_dict(parsed_json)
+                translated_code = llm_output.translated_code
+                
+                logger.info(
+                    f"Translation parsed successfully for {node_id}",
+                    extra={
+                        "stage_name": "translation_orchestration",
+                        "node_id": node_id,
+                        "dependencies_count": len(llm_output.dependencies)
+                    }
+                )
+                
+            except (StructuredLLMError, ValueError) as e:
+                logger.error(
+                    f"Failed to parse LLM response for {node_id}: {e}",
+                    extra={
+                        "stage_name": "translation_orchestration",
+                        "node_id": node_id,
+                        "error": str(e),
+                        "raw_response": response.text[:500]
+                    }
+                )
+                return TranslationResult(
+                    module_name=node_id,
+                    status=TranslationStatus.FAILED,
+                    errors=[f"Response parsing failed: {e}"],
+                    dependencies_used=optimized_context.included_nodes
+                )
             
             # Use token count from response if available, otherwise estimate
             if response.token_count > 0:

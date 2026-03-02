@@ -45,9 +45,6 @@ from app.api.dependencies import (
 )
 from app.ingestion.ingestor import RepositoryIngestor, IngestionError
 from app.dependency_graph.graph_builder import GraphBuilder
-from app.translation.orchestrator import TranslationOrchestrator
-from app.validation import ValidationEngine
-from app.audit import AuditEngine
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -543,3 +540,135 @@ async def get_report(
         documentation=documentation_response,
         statistics=statistics
     )
+
+
+
+# ============================================================================
+# POST /validate - Repository Validation
+# ============================================================================
+
+@router.post(
+    "/validate",
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Validate repository structure",
+    description="Execute validation pipeline: parse → graph → check for circular dependencies"
+)
+async def validate_repository(
+    file: UploadFile = File(..., description="ZIP file upload"),
+    language: str = "java",
+    pipeline_service = Depends(get_pipeline_service)
+):
+    """Execute validation pipeline.
+    
+    Args:
+        file: Uploaded ZIP file
+        language: Source language
+        pipeline_service: Pipeline service
+        
+    Returns:
+        Validation results
+    """
+    if not file or not file.filename.endswith('.zip'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only ZIP files are supported"
+        )
+    
+    temp_file = None
+    try:
+        # Save uploaded file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp:
+            content = await file.read()
+            temp.write(content)
+            temp_file = temp.name
+        
+        logger.info(f"Executing validation pipeline for {file.filename}")
+        
+        # Execute validation pipeline
+        result = await pipeline_service.execute_validation_pipeline(
+            repo_path=temp_file,
+            source_language=language
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Validation pipeline failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Validation pipeline failed: {str(e)}"
+        )
+    finally:
+        if temp_file and Path(temp_file).exists():
+            Path(temp_file).unlink()
+
+
+# ============================================================================
+# POST /optimize - Context Optimization
+# ============================================================================
+
+@router.post(
+    "/optimize",
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Optimize context for repository",
+    description="Execute optimization pipeline: parse → graph → context optimization analysis"
+)
+async def optimize_repository(
+    file: UploadFile = File(..., description="ZIP file upload"),
+    language: str = "java",
+    depth: int = None,
+    pipeline_service = Depends(get_pipeline_service)
+):
+    """Execute optimization pipeline.
+    
+    Args:
+        file: Uploaded ZIP file
+        language: Source language
+        depth: Context expansion depth
+        pipeline_service: Pipeline service
+        
+    Returns:
+        Optimization results
+    """
+    if not file or not file.filename.endswith('.zip'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only ZIP files are supported"
+        )
+    
+    temp_file = None
+    try:
+        # Save uploaded file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp:
+            content = await file.read()
+            temp.write(content)
+            temp_file = temp.name
+        
+        logger.info(f"Executing optimization pipeline for {file.filename}")
+        
+        # Execute optimization pipeline
+        result = await pipeline_service.execute_optimization_pipeline(
+            repo_path=temp_file,
+            source_language=language,
+            expansion_depth=depth
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Optimization pipeline failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Optimization pipeline failed: {str(e)}"
+        )
+    finally:
+        if temp_file and Path(temp_file).exists():
+            Path(temp_file).unlink()

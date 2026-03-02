@@ -38,11 +38,15 @@ STRICT RULES:
 
 OUTPUT FORMAT (STRICT JSON):
 {
-  "function_name": "",
   "translated_code": "string",
-  "dependencies_used": [],
-  "placeholders_created": [],
-  "needs_review": false,
-  "token_usage_estimate": 0,
-  "errors": []
+  "dependencies": [],
+  "notes": "string"
 }
+
+CRITICAL OUTPUT RULES:
+- You MUST return ONLY valid JSON
+- NO markdown code fences (no ```)
+- NO explanations before or after JSON
+- NO extra text outside the JSON object
+- NO comments in JSON
+- Start response with { and end with }

@@ -1,0 +1,117 @@
+{
+  "status": "FIXED",
+  "modules_changed": [
+    "app/llm/gemini_client.py",
+    "app/llm/response_parser.py",
+    "app/llm/response_schema.py",
+    "app/llm/exceptions.py",
+    "app/llm/llm_service.py",
+    "app/llm/interface.py",
+    "app/translation/orchestrator.py",
+    "prompts/code_translation.txt",
+    "tests/llm/test_response_parsing.py"
+  ],
+  "changes_summary": {
+    "step_1_response_schema": {
+      "file": "app/llm/response_schema.py",
+      "description": "Created TranslationLLMOutput dataclass with strict schema validation",
+      "schema": {
+        "translated_code": "string",
+        "dependencies": "list[string]",
+        "notes": "string"
+      }
+    },
+    "step_2_prompt_update": {
+      "file": "prompts/code_translation.txt",
+      "description": "Updated prompt to enforce JSON-only output with explicit rules",
+      "rules_added": [
+        "You MUST return ONLY valid JSON",
+        "NO markdown code fences",
+        "NO explanations before or after JSON",
+        "NO extra text outside the JSON object",
+        "NO comments in JSON",
+        "Start response with { and end with }"
+      ]
+    },
+    "step_3_gemini_json_mode": {
+      "file": "app/llm/gemini_client.py",
+      "description": "Added force_json parameter to enable Gemini JSON mode",
+      "implementation": "generation_config.response_mime_type = 'application/json'"
+    },
+    "step_4_safe_parser": {
+      "file": "app/llm/response_parser.py",
+      "description": "Implemented deterministic parse_llm_json() function",
+      "steps": [
+        "Strip markdown code fences",
+        "Extract first {...} block",
+        "Parse with json.loads()",
+        "Validate dictionary type",
+        "Raise StructuredLLMError on any failure"
+      ],
+      "no_silent_retries": true
+    },
+    "step_5_logging": {
+      "file": "app/llm/response_parser.py",
+      "description": "Added comprehensive error logging",
+      "logged_fields": [
+        "node_id",
+        "model_name",
+        "prompt_version",
+        "raw_response (first 500 chars)",
+        "error details"
+      ]
+    },
+    "step_6_tests": {
+      "file": "tests/llm/test_response_parsing.py",
+      "description": "Created comprehensive test suite with 22 test cases",
+      "test_categories": [
+        "Valid JSON parsing",
+        "Markdown-wrapped JSON",
+        "JSON with explanations",
+        "Invalid JSON handling",
+        "Missing keys validation",
+        "Type validation",
+        "Integration tests"
+      ],
+      "test_results": "22 passed"
+    },
+    "additional_changes": {
+      "interface": {
+        "file": "app/llm/interface.py",
+        "change": "Updated LLMClient.generate() abstract method to include force_json parameter"
+      },
+      "exceptions": {
+        "file": "app/llm/exceptions.py",
+        "added": "StructuredLLMError exception class"
+      },
+      "llm_service": {
+        "file": "app/llm/llm_service.py",
+        "change": "Added force_json parameter to generate() method"
+      },
+      "orchestrator": {
+        "file": "app/translation/orchestrator.py",
+        "changes": [
+          "Imported response_parser and response_schema",
+          "Set force_json=True in LLM calls",
+          "Added JSON parsing and validation",
+          "Added error handling for StructuredLLMError"
+        ]
+      }
+    }
+  },
+  "guarantees": {
+    "deterministic_parsing": "Parser behaves identically for same input",
+    "no_silent_failures": "All parsing errors raise StructuredLLMError",
+    "schema_validation": "Only schema-valid responses are accepted",
+    "comprehensive_logging": "All failures logged with full context",
+    "json_mode_enforcement": "Gemini API forced to return JSON"
+  },
+  "architecture_preserved": true,
+  "pipeline_unchanged": true,
+  "backward_compatible": false,
+  "breaking_changes": [
+    "LLMClient.generate() now accepts force_json parameter",
+    "LLMService.generate() now accepts force_json parameter",
+    "Translation responses must match TranslationLLMOutput schema"
+  ]
+}

@@ -1,6 +1,7 @@
 """LLM client interfaces."""
 from app.llm.interface import LLMClient, LLMResponse
 from app.llm.gemini_client import GeminiClient
+from app.llm.factory import get_llm_client
 from app.llm.llm_service import LLMService
 from app.llm.exceptions import (
     LLMError,
@@ -32,6 +33,7 @@ __all__ = [
     'LLMClient',
     'LLMResponse',
     'GeminiClient',
+    'get_llm_client',
     'LLMService',
     'estimate_tokens',
     'LLMError',

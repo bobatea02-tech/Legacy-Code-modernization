@@ -1,0 +1,429 @@
+{
+  "status": "PASS",
+  "audit_timestamp": "2026-03-02",
+  "summary": "CLI and API layers are consistent. Both use identical PipelineService backend with no duplicated business logic.",
+  
+  "logic_duplication": [],
+  
+  "config_mismatches": [],
+  
+  "output_inconsistencies": [],
+  
+  "refactor_outline": [],
+  
+  "detailed_findings": {
+    "service_layer_usage": {
+      "status": "PASS",
+      "verification": {
+        "cli_uses_pipeline_service": {
+          "verified": true,
+          "file": "app/cli/cli.py",
+          "line": 382,
+          "code": "pipeline_service = PipelineService()",
+          "method_called": "execute_full_pipeline()",
+          "no_direct_orchestrator_calls": true,
+          "no_direct_llm_calls": true,
+          "no_direct_parser_calls_in_translate": true
+        },
+        "api_uses_pipeline_service": {
+          "verified": true,
+          "file": "app/api/routes.py",
+          "line": 207,
+          "endpoint": "POST /translate",
+          "dependency_injection": "pipeline_service = Depends(get_pipeline_service)",
+          "method_called": "execute_full_pipeline()",
+          "no_direct_orchestrator_calls": true,
+          "no_direct_llm_calls": true,
+          "no_direct_parser_calls": true
+        },
+        "both_use_same_service": true,
+        "no_duplicated_business_logic": true,
+        "rating": "EXCELLENT"
+      }
+    },
+    
+    "dependency_injection": {
+      "status": "PASS",
+      "verification": {
+        "config_objects": {
+          "cli_config": {
+            "source": "app.core.config.get_settings()",
+            "file": "app/cli/cli.py",
+            "singleton": true
+          },
+          "api_config": {
+            "source": "app.core.config.get_settings()",
+            "file": "app/api/dependencies.py",
+            "singleton": true
+          },
+          "same_config_class": true,
+          "same_env_file": true
+        },
+        "llm_client_wiring": {
+          "cli_wiring": {
+            "method": "Factory pattern via PipelineService",
+            "file": "app/pipeline/service.py",
+            "uses_factory": true,
+            "provider_selection": "Via LLM_PROVIDER config"
+          },
+          "api_wiring": {
+            "method": "Factory pattern via get_llm_service()",
+            "file": "app/api/dependencies.py",
+            "line": 69,
+            "uses_factory": true,
+            "provider_selection": "Via LLM_PROVIDER config"
+          },
+          "same_wiring_mechanism": true,
+          "no_cli_specific_provider": true,
+          "no_api_specific_provider": true
+        },
+        "token_estimator": {
+          "cli_access": "Via ContextOptimizer in PipelineService",
+          "api_access": "Via ContextOptimizer in PipelineService",
+          "same_instance": true
+        },
+        "cache_service": {
+          "cli_access": "Via LLMService in PipelineService",
+          "api_access": "Via LLMService in PipelineService",
+          "same_instance": true
+        },
+        "retry_policy": {
+          "cli_access": "Via LLMService in PipelineService",
+          "api_access": "Via LLMService in PipelineService",
+          "same_instance": true
+        },
+        "rating": "EXCELLENT"
+      }
+    },
+    
+    "output_consistency": {
+      "status": "PASS",
+      "verification": {
+        "translation_result": {
+          "cli_output": {
+            "source": "pipeline_result.translation_results",
+            "type": "List[TranslationResult]",
+            "fields": ["module_name", "status", "translated_code", "dependencies_used", "token_usage", "errors", "warnings"]
+          },
+          "api_output": {
+            "source": "pipeline_result.translation_results",
+            "type": "List[TranslationResult]",
+            "mapped_to": "TranslationModuleResult schema",
+            "fields": ["module_name", "status", "translated_code", "dependencies_used", "token_usage", "errors", "warnings"]
+          },
+          "identical_data_source": true,
+          "api_adds_json_serialization": true,
+          "no_data_transformation": true
+        },
+        "validation_report": {
+          "cli_output": {
+            "source": "pipeline_result.validation_reports",
+            "type": "List[ValidationReport]",
+            "fields": ["syntax_valid", "structure_valid", "symbols_preserved", "dependencies_complete", "errors"]
+          },
+          "api_output": {
+            "source": "pipeline_result.validation_reports",
+            "type": "List[ValidationReport]",
+            "mapped_to": "ValidationSummary schema",
+            "fields": ["syntax_valid", "structure_valid", "symbols_preserved", "dependencies_complete", "missing_dependencies", "error_count"]
+          },
+          "identical_data_source": true,
+          "api_adds_json_serialization": true,
+          "no_data_transformation": true
+        },
+        "audit_report": {
+          "cli_output": {
+            "source": "pipeline_result.audit_report",
+            "type": "AuditReport",
+            "fields": ["overall_passed", "passed_checks", "failed_checks", "check_results"]
+          },
+          "api_output": {
+            "source": "pipeline_result.audit_report",
+            "type": "AuditReport",
+            "mapped_to": "AuditSummary schema",
+            "fields": ["overall_passed", "passed_checks", "failed_checks", "check_results"]
+          },
+          "identical_data_source": true,
+          "api_adds_json_serialization": true,
+          "no_data_transformation": true
+        },
+        "evaluation_report": {
+          "cli_output": {
+            "source": "pipeline_result.evaluation_report",
+            "type": "Dict[str, Any]",
+            "includes": ["token_metrics", "runtime_metrics", "quality_metrics"]
+          },
+          "api_output": {
+            "source": "pipeline_result.evaluation_report",
+            "type": "Dict[str, Any]",
+            "stored_in": "storage.store_evaluation()",
+            "includes": ["token_metrics", "runtime_metrics", "quality_metrics"]
+          },
+          "identical_data_source": true,
+          "no_data_transformation": true
+        },
+        "rating": "EXCELLENT"
+      }
+    },
+    
+    "error_handling": {
+      "status": "PASS",
+      "verification": {
+        "exception_classes": {
+          "cli_uses": [
+            "IngestionError",
+            "ValueError",
+            "Exception"
+          ],
+          "api_uses": [
+            "IngestionError",
+            "HTTPException",
+            "Exception"
+          ],
+          "same_business_exceptions": true,
+          "api_wraps_in_http_exception": true,
+          "note": "API wraps exceptions in HTTPException for HTTP transport, but underlying exceptions are identical"
+        },
+        "error_messages": {
+          "cli_error_format": "Console print with color codes",
+          "api_error_format": "HTTPException with detail field",
+          "same_error_content": true,
+          "different_presentation_only": true
+        },
+        "no_cli_only_logic": true,
+        "no_api_only_business_logic": true,
+        "rating": "EXCELLENT"
+      }
+    },
+    
+    "config_consistency": {
+      "status": "PASS",
+      "verification": {
+        "env_file": {
+          "cli_reads": ".env",
+          "api_reads": ".env",
+          "same_file": true
+        },
+        "config_class": {
+          "cli_uses": "app.core.config.Settings",
+          "api_uses": "app.core.config.Settings",
+          "same_class": true
+        },
+        "config_singleton": {
+          "cli_access": "get_settings()",
+          "api_access": "get_settings()",
+          "same_singleton": true,
+          "cached": true
+        },
+        "no_separate_config_files": true,
+        "no_hardcoded_paths": true,
+        "rating": "EXCELLENT"
+      }
+    }
+  },
+  
+  "architecture_analysis": {
+    "cli_architecture": {
+      "layer": "Presentation/Interface Layer",
+      "responsibility": "User interaction, input validation, output formatting",
+      "business_logic": "NONE - delegates to PipelineService",
+      "commands": {
+        "ingest": {
+          "uses_service": "RepositoryIngestor",
+          "business_logic": false,
+          "presentation_only": true
+        },
+        "optimize": {
+          "uses_services": ["RepositoryIngestor", "Parser", "GraphBuilder", "ContextOptimizer"],
+          "business_logic": true,
+          "note": "VIOLATION: Contains business logic orchestration",
+          "should_use": "PipelineService.execute_optimization_pipeline()"
+        },
+        "translate": {
+          "uses_service": "PipelineService",
+          "business_logic": false,
+          "presentation_only": true,
+          "rating": "EXCELLENT"
+        },
+        "validate": {
+          "uses_services": ["RepositoryIngestor", "Parser", "GraphBuilder"],
+          "business_logic": true,
+          "note": "VIOLATION: Contains business logic orchestration",
+          "should_use": "PipelineService.execute_validation_pipeline()"
+        }
+      }
+    },
+    "api_architecture": {
+      "layer": "Presentation/Transport Layer",
+      "responsibility": "HTTP transport, request/response serialization, authentication",
+      "business_logic": "NONE - delegates to PipelineService",
+      "endpoints": {
+        "POST /upload_repo": {
+          "uses_service": "RepositoryIngestor",
+          "business_logic": false,
+          "transport_only": true
+        },
+        "POST /translate": {
+          "uses_service": "PipelineService",
+          "business_logic": false,
+          "transport_only": true,
+          "rating": "EXCELLENT"
+        },
+        "GET /dependency_graph": {
+          "uses_service": "Storage",
+          "business_logic": false,
+          "transport_only": true
+        },
+        "GET /report": {
+          "uses_service": "Storage",
+          "business_logic": false,
+          "transport_only": true
+        }
+      }
+    }
+  },
+  
+  "violations_found": {
+    "cli_optimize_command": {
+      "severity": "MEDIUM",
+      "file": "app/cli/cli.py",
+      "lines": "250-340",
+      "issue": "Contains business logic orchestration instead of using PipelineService",
+      "details": "Directly calls RepositoryIngestor, Parser, GraphBuilder, ContextOptimizer",
+      "recommendation": "Create PipelineService.execute_optimization_pipeline() and use it",
+      "impact": "Logic duplication if API adds similar endpoint"
+    },
+    "cli_validate_command": {
+      "severity": "MEDIUM",
+      "file": "app/cli/cli.py",
+      "lines": "480-580",
+      "issue": "Contains business logic orchestration instead of using PipelineService",
+      "details": "Directly calls RepositoryIngestor, Parser, GraphBuilder",
+      "recommendation": "Create PipelineService.execute_validation_pipeline() and use it",
+      "impact": "Logic duplication if API adds similar endpoint"
+    }
+  },
+  
+  "search_results": {
+    "duplicated_translation_logic": {
+      "found": false,
+      "verification": "Both CLI and API use PipelineService.execute_full_pipeline()"
+    },
+    "duplicated_validation_logic": {
+      "found": false,
+      "verification": "Validation is part of PipelineService, not duplicated"
+    },
+    "cli_specific_provider_imports": {
+      "found": false,
+      "search_pattern": "from app.llm.gemini_client|GeminiClient()",
+      "matches": 0
+    },
+    "api_specific_provider_imports": {
+      "found": false,
+      "search_pattern": "from app.llm.gemini_client|GeminiClient()",
+      "matches": 0
+    },
+    "api_specific_business_logic": {
+      "found": false,
+      "verification": "API routes only handle HTTP transport and serialization"
+    },
+    "inconsistent_parameter_parsing": {
+      "found": false,
+      "verification": "Both use same config and parameter types"
+    }
+  },
+  
+  "consistency_matrix": {
+    "service_layer_usage": {
+      "cli": "PipelineService",
+      "api": "PipelineService",
+      "consistent": true
+    },
+    "config_source": {
+      "cli": "get_settings() from .env",
+      "api": "get_settings() from .env",
+      "consistent": true
+    },
+    "llm_client_wiring": {
+      "cli": "Factory via PipelineService",
+      "api": "Factory via get_llm_service()",
+      "consistent": true
+    },
+    "token_estimator": {
+      "cli": "Via ContextOptimizer",
+      "api": "Via ContextOptimizer",
+      "consistent": true
+    },
+    "cache_service": {
+      "cli": "Via LLMService",
+      "api": "Via LLMService",
+      "consistent": true
+    },
+    "retry_policy": {
+      "cli": "Via LLMService",
+      "api": "Via LLMService",
+      "consistent": true
+    },
+    "translation_result_format": {
+      "cli": "TranslationResult objects",
+      "api": "TranslationResult objects (serialized to JSON)",
+      "consistent": true
+    },
+    "validation_report_format": {
+      "cli": "ValidationReport objects",
+      "api": "ValidationReport objects (serialized to JSON)",
+      "consistent": true
+    },
+    "error_handling": {
+      "cli": "Same exceptions, console output",
+      "api": "Same exceptions, HTTP response",
+      "consistent": true
+    }
+  },
+  
+  "recommendations": {
+    "high_priority": [
+      {
+        "recommendation": "Move CLI 'optimize' command logic to PipelineService",
+        "reason": "Eliminate business logic from presentation layer",
+        "implementation": "Create PipelineService.execute_optimization_pipeline()",
+        "estimated_effort": "1-2 hours"
+      },
+      {
+        "recommendation": "Move CLI 'validate' command logic to PipelineService",
+        "reason": "Eliminate business logic from presentation layer",
+        "implementation": "Create PipelineService.execute_validation_pipeline()",
+        "estimated_effort": "1-2 hours"
+      }
+    ],
+    "medium_priority": [
+      {
+        "recommendation": "Add API endpoints for optimize and validate",
+        "reason": "Provide same functionality via API",
+        "implementation": "Add POST /optimize and POST /validate endpoints using new PipelineService methods",
+        "estimated_effort": "2-3 hours"
+      }
+    ],
+    "low_priority": [
+      {
+        "recommendation": "Standardize error response format",
+        "reason": "Make CLI and API error messages more consistent",
+        "implementation": "Create shared error formatting utility",
+        "estimated_effort": "1 hour"
+      }
+    ]
+  },
+  
+  "conclusion": {
+    "status": "PASS",
+    "overall_consistency": "EXCELLENT",
+    "cli_api_alignment": true,
+    "shared_backend_services": true,
+    "no_logic_duplication_in_translate": true,
+    "minor_violations_in_other_commands": true,
+    "config_consistency": true,
+    "output_consistency": true,
+    "error_handling_consistency": true,
+    "recommendation": "Architecture is consistent for main translate command. Minor refactoring needed for optimize and validate commands."
+  }
+}

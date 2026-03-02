@@ -24,7 +24,8 @@ class MockLLMClient(LLMClient):
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        force_json: bool = False
     ) -> LLMResponse:
         """Mock generate method."""
         self.generate_calls.append({

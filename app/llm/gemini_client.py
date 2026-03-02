@@ -2,10 +2,11 @@
 
 Implements LLMClient interface with only API communication logic.
 No caching, no retry, no token estimation - pure API calls.
+Supports structured JSON output for deterministic responses.
 """
 
 import google.generativeai as genai
-from typing import List
+from typing import List, Optional
 
 from app.llm.interface import LLMClient, LLMResponse
 from app.llm.exceptions import (
@@ -30,12 +31,12 @@ class GeminiClient(LLMClient):
         self.settings = get_settings()
         
         # Validate API key
-        if not self.settings.GEMINI_API_KEY:
-            logger.error("Gemini API key is missing", extra={"stage_name": "llm"})
-            raise APIKeyMissingError("GEMINI_API_KEY is not configured")
+        if not self.settings.LLM_API_KEY:
+            logger.error("LLM API key is missing", extra={"stage_name": "llm"})
+            raise APIKeyMissingError("LLM_API_KEY is not configured")
         
         # Configure Gemini API
-        genai.configure(api_key=self.settings.GEMINI_API_KEY)
+        genai.configure(api_key=self.settings.LLM_API_KEY)
         
         # Initialize model
         self.model_name = self.settings.LLM_MODEL_NAME
@@ -54,7 +55,8 @@ class GeminiClient(LLMClient):
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        force_json: bool = False
     ) -> LLMResponse:
         """Generate completion from Gemini API.
         
@@ -63,6 +65,7 @@ class GeminiClient(LLMClient):
             user_prompt: User input/query
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
+            force_json: If True, force JSON output mode
             
         Returns:
             LLMResponse with generated text and metadata
@@ -80,7 +83,8 @@ class GeminiClient(LLMClient):
                 "stage_name": "llm",
                 "model": self.model_name,
                 "temperature": temperature,
-                "max_tokens": max_tokens
+                "max_tokens": max_tokens,
+                "force_json": force_json
             }
         )
         
@@ -90,6 +94,10 @@ class GeminiClient(LLMClient):
                 temperature=temperature,
                 max_output_tokens=max_tokens
             )
+            
+            # Force JSON mode if requested
+            if force_json:
+                generation_config.response_mime_type = "application/json"
             
             # Make API call
             response = self.model.generate_content(

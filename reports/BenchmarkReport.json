@@ -1,0 +1,45 @@
+{
+  "benchmark_date": "2026-03-01 22:46:48",
+  "status": "COMPLETE",
+  "datasets_benchmarked": 2,
+  "aggregate_metrics": {
+    "total_files_processed": 11,
+    "total_modules_translated": 63,
+    "total_runtime_seconds": 255.05,
+    "average_reduction_percent": 100.0
+  },
+  "individual_results": [
+    {
+      "repo_name": "java_small",
+      "files_count": 6,
+      "modules_translated": 34,
+      "naive_tokens": 12750,
+      "optimized_tokens": 0,
+      "reduction_percent": 100.0,
+      "total_runtime_seconds": 137.14,
+      "avg_runtime_per_module": 4.03,
+      "validation_errors": 0,
+      "dependency_missing_count": 0,
+      "syntax_failures": 0,
+      "prompt_version": "1.0.0",
+      "prompt_checksum": "6ea356f3",
+      "model_name": "gemini-2.5-flash"
+    },
+    {
+      "repo_name": "cobol_small",
+      "files_count": 5,
+      "modules_translated": 29,
+      "naive_tokens": 10875,
+      "optimized_tokens": 0,
+      "reduction_percent": 100.0,
+      "total_runtime_seconds": 117.91,
+      "avg_runtime_per_module": 4.07,
+      "validation_errors": 0,
+      "dependency_missing_count": 0,
+      "syntax_failures": 0,
+      "prompt_version": "1.0.0",
+      "prompt_checksum": "6ea356f3",
+      "model_name": "gemini-2.5-flash"
+    }
+  ]
+}

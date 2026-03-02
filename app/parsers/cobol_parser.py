@@ -66,7 +66,7 @@ class CobolParser(BaseParser):
                 all_dependencies = list(called_programs | performed_paragraphs)
                 
                 node = ASTNode(
-                    id=f"{file_path}::{program_name}",
+                    id=f"{file_path}:{program_name}:{start_line}",
                     name=program_name,
                     node_type="program",
                     parameters=[],
@@ -87,7 +87,7 @@ class CobolParser(BaseParser):
                 start_line = content[:match.start()].count('\n') + 1
                 
                 node = ASTNode(
-                    id=f"{file_path}::{section_name}",
+                    id=f"{file_path}:{section_name}:{start_line}",
                     name=section_name,
                     node_type="section",
                     parameters=[],
@@ -135,7 +135,7 @@ class CobolParser(BaseParser):
                 local_dependencies = list(local_performs | local_calls)
                 
                 node = ASTNode(
-                    id=f"{file_path}::{para_name}",
+                    id=f"{file_path}:{para_name}:{start_line}",
                     name=para_name,
                     node_type="paragraph",
                     parameters=[],

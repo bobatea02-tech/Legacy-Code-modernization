@@ -23,14 +23,6 @@ from rich.table import Table
 from rich import print as rprint
 
 from app.ingestion.ingestor import RepositoryIngestor, IngestionConfig, IngestionError
-from app.parsers.java_parser import JavaParser
-from app.parsers.cobol_parser import CobolParser
-from app.dependency_graph.graph_builder import GraphBuilder
-from app.context_optimizer.optimizer import ContextOptimizer
-from app.translation.orchestrator import TranslationOrchestrator, TranslationStore
-from app.llm.gemini_client import GeminiClient
-from app.validation import ValidationEngine
-from app.audit import AuditEngine
 from app.pipeline import PipelineService
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -83,14 +75,12 @@ def get_parser(language: str):
     Raises:
         typer.Exit: If language not supported
     """
-    language_lower = language.lower()
-    
-    if language_lower == "java":
-        return JavaParser()
-    elif language_lower == "cobol":
-        return CobolParser()
-    else:
-        console.print(f"[red]Error:[/red] Unsupported language: {language}")
+    # Delegate to PipelineService for parser instantiation
+    pipeline = PipelineService()
+    try:
+        return pipeline.get_parser(language)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=1)
 
 
@@ -249,97 +239,34 @@ def optimize(
         # Validate path
         path = validate_repo_path(repo_path)
         
-        # Get settings
-        settings = get_settings()
-        expansion_depth = depth if depth is not None else settings.CONTEXT_EXPANSION_DEPTH
+        # Initialize centralized pipeline service
+        console.print("Initializing pipeline service...")
+        pipeline_service = PipelineService()
         
-        # Phase 1: Ingest
-        console.print("[1/4] Ingesting repository...")
-        config = IngestionConfig()
-        ingestor = RepositoryIngestor(config=config)
-        file_metadata_list = ingestor.ingest_zip(str(path))
-        console.print(f"  ✓ Ingested {len(file_metadata_list)} files")
+        # Execute optimization pipeline
+        console.print(f"Executing optimization pipeline for {path}...\n")
         
-        # Phase 2: Parse to AST
-        console.print("\n[2/4] Parsing files to AST...")
-        parser = get_parser(language)
-        ast_nodes = []
+        import asyncio
+        result = asyncio.run(pipeline_service.execute_optimization_pipeline(
+            repo_path=str(path),
+            source_language=language,
+            expansion_depth=depth
+        ))
         
-        for file_meta in file_metadata_list:
-            if file_meta.language.lower() == language.lower():
-                try:
-                    nodes = parser.parse_file(str(file_meta.path))
-                    ast_nodes.extend(nodes)
-                except Exception as e:
-                    if verbose:
-                        console.print(f"  [yellow]Warning:[/yellow] Failed to parse {file_meta.relative_path}: {e}")
-        
-        console.print(f"  ✓ Parsed {len(ast_nodes)} AST nodes")
-        
-        if not ast_nodes:
-            console.print("[red]Error:[/red] No parseable files found")
+        if result["status"] != "success":
+            console.print(f"[red]Pipeline failed:[/red] {result.get('error', 'Unknown error')}")
             raise typer.Exit(code=1)
-        
-        # Phase 3: Build dependency graph
-        console.print("\n[3/4] Building dependency graph...")
-        graph_builder = GraphBuilder()
-        dependency_graph = graph_builder.build_graph(ast_nodes)
-        
-        node_count = dependency_graph.number_of_nodes()
-        edge_count = dependency_graph.number_of_edges()
-        console.print(f"  ✓ Built graph: {node_count} nodes, {edge_count} edges")
-        
-        # Phase 4: Optimize context for sample nodes
-        console.print(f"\n[4/4] Optimizing context (depth={expansion_depth})...")
-        context_optimizer = ContextOptimizer(expansion_depth=expansion_depth)
-        ast_index = {node.id: node for node in ast_nodes}
-        
-        # Optimize context for first few nodes as examples
-        sample_size = min(3, len(ast_nodes))
-        optimizations = []
-        
-        for i, node in enumerate(ast_nodes[:sample_size]):
-            try:
-                optimized = context_optimizer.optimize_context(
-                    target_node_id=node.id,
-                    dependency_graph=dependency_graph,
-                    ast_index=ast_index,
-                    expansion_depth=expansion_depth
-                )
-                optimizations.append({
-                    "node_name": node.name,
-                    "included_nodes": len(optimized.included_nodes),
-                    "excluded_nodes": len(optimized.excluded_nodes),
-                    "estimated_tokens": optimized.estimated_tokens
-                })
-            except Exception as e:
-                if verbose:
-                    console.print(f"  [yellow]Warning:[/yellow] Failed to optimize {node.name}: {e}")
-        
-        console.print(f"  ✓ Optimized context for {len(optimizations)} sample nodes")
         
         # Print summary
         console.print("\n[bold green]Optimization Complete[/bold green]")
         
-        summary = {
-            "repository": str(path),
-            "language": language,
-            "ast_nodes": len(ast_nodes),
-            "graph_nodes": node_count,
-            "graph_edges": edge_count,
-            "expansion_depth": expansion_depth,
-            "sample_optimizations": optimizations
-        }
-        
         if verbose:
-            print_json_summary(summary, "Optimization Summary")
+            print_json_summary(result, "Optimization Summary")
         else:
-            console.print(f"  AST Nodes: {len(ast_nodes)}")
-            console.print(f"  Graph: {node_count} nodes, {edge_count} edges")
-            console.print(f"  Depth: {expansion_depth}")
-        
-        # Cleanup
-        ingestor.cleanup()
+            console.print(f"  AST Nodes: {result['ast_node_count']}")
+            console.print(f"  Graph: {result['graph_node_count']} nodes, {result['graph_edge_count']} edges")
+            console.print(f"  Depth: {result['expansion_depth']}")
+            console.print(f"  Samples analyzed: {len(result['sample_optimizations'])}")
         
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -499,88 +426,46 @@ def validate(
         # Validate path
         path = validate_repo_path(repo_path)
         
-        # Phase 1: Ingest
-        console.print("[1/3] Ingesting repository...")
-        config = IngestionConfig()
-        ingestor = RepositoryIngestor(config=config)
-        file_metadata_list = ingestor.ingest_zip(str(path))
-        console.print(f"  ✓ Ingested {len(file_metadata_list)} files")
+        # Initialize centralized pipeline service
+        console.print("Initializing pipeline service...")
+        pipeline_service = PipelineService()
         
-        # Phase 2: Parse to AST
-        console.print("\n[2/3] Parsing files to AST...")
-        parser = get_parser(language)
-        ast_nodes = []
-        parse_errors = []
+        # Execute validation pipeline
+        console.print(f"Executing validation pipeline for {path}...\n")
         
-        for file_meta in file_metadata_list:
-            if file_meta.language.lower() == language.lower():
-                try:
-                    nodes = parser.parse_file(str(file_meta.path))
-                    ast_nodes.extend(nodes)
-                except Exception as e:
-                    parse_errors.append(f"{file_meta.relative_path}: {e}")
+        import asyncio
+        result = asyncio.run(pipeline_service.execute_validation_pipeline(
+            repo_path=str(path),
+            source_language=language
+        ))
         
-        console.print(f"  ✓ Parsed {len(ast_nodes)} AST nodes")
-        
-        if parse_errors and verbose:
-            console.print(f"\n  [yellow]Parse errors:[/yellow]")
-            for error in parse_errors[:5]:  # Show first 5
-                console.print(f"    • {error}")
-        
-        if not ast_nodes:
-            console.print("[red]Error:[/red] No parseable files found")
+        if result["status"] != "success":
+            console.print(f"[red]Pipeline failed:[/red] {result.get('error', 'Unknown error')}")
             raise typer.Exit(code=1)
         
-        # Phase 3: Build and validate dependency graph
-        console.print("\n[3/3] Validating dependency graph...")
-        graph_builder = GraphBuilder()
-        dependency_graph = graph_builder.build_graph(ast_nodes)
-        
-        node_count = dependency_graph.number_of_nodes()
-        edge_count = dependency_graph.number_of_edges()
-        
-        # Check for circular dependencies
-        import networkx as nx
-        is_dag = nx.is_directed_acyclic_graph(dependency_graph)
-        
-        if is_dag:
+        # Print results
+        if result["is_dag"]:
             console.print(f"  ✓ No circular dependencies detected")
         else:
-            cycles = list(nx.simple_cycles(dependency_graph))
-            console.print(f"  [red]✗[/red] Circular dependencies detected: {len(cycles)} cycles")
-            if verbose and cycles:
+            console.print(f"  [red]✗[/red] Circular dependencies detected: {result['circular_dependencies']} cycles")
+            if verbose and result.get("cycles"):
                 console.print(f"\n  [yellow]Sample cycles:[/yellow]")
-                for cycle in cycles[:3]:  # Show first 3
+                for cycle in result["cycles"]:
                     console.print(f"    • {' → '.join(cycle)}")
         
         # Print summary
         console.print("\n[bold green]Validation Complete[/bold green]")
         
-        summary = {
-            "repository": str(path),
-            "language": language,
-            "files_ingested": len(file_metadata_list),
-            "ast_nodes": len(ast_nodes),
-            "parse_errors": len(parse_errors),
-            "graph_nodes": node_count,
-            "graph_edges": edge_count,
-            "is_dag": is_dag,
-            "circular_dependencies": 0 if is_dag else len(list(nx.simple_cycles(dependency_graph)))
-        }
-        
         if verbose:
-            print_json_summary(summary, "Validation Summary")
+            print_json_summary(result, "Validation Summary")
         else:
-            console.print(f"\n  Files: {len(file_metadata_list)}")
-            console.print(f"  AST Nodes: {len(ast_nodes)}")
-            console.print(f"  Graph: {node_count} nodes, {edge_count} edges")
-            console.print(f"  DAG: {'✓ Yes' if is_dag else '✗ No (circular dependencies)'}")
-        
-        # Cleanup
-        ingestor.cleanup()
+            console.print(f"\n  Files: {result['file_count']}")
+            console.print(f"  AST Nodes: {result['ast_node_count']}")
+            console.print(f"  Graph: {result['graph_node_count']} nodes, {result['graph_edge_count']} edges")
+            console.print(f"  DAG: {'✓ Yes' if result['is_dag'] else '✗ No (circular dependencies)'}")
         
         # Exit with error if validation failed
-        if not is_dag or parse_errors:
+        if not result["is_dag"]:
             raise typer.Exit(code=1)
         
     except Exception as e:
