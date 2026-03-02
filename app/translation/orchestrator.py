@@ -346,7 +346,7 @@ class TranslationOrchestrator:
                 user_prompt=prompt_bundle.user_prompt,
                 max_tokens=self.settings.MAX_TOKEN_LIMIT,
                 temperature=0.3,  # Lower temperature for more deterministic translation
-                force_json=False  # Disable JSON mode for now - prompt enforces JSON
+                force_json=True  # Enable JSON mode for structured output
             )
             
             # Parse and validate JSON response

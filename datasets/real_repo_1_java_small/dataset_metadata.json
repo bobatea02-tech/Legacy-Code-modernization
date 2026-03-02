@@ -1,0 +1,40 @@
+{
+  "dataset_hash": "73097dd2877cbf984b178097c89e9532ae2d90b96700d07c55102f14d3ee83b3",
+  "dataset_id": "real_repo_1_java_small",
+  "file_count": 6,
+  "files": [
+    {
+      "hash": "1991f5d9c3049a5edcf3e3f7d608d976a06bdbeed16b68cf9b50054f0e3d5e2c",
+      "path": "java_small/src/App.java",
+      "size": 1312
+    },
+    {
+      "hash": "a57200111485c68f560984f95685e5cf2ddaeec875be9aff74401c369a6ac1cf",
+      "path": "java_small/src/model/User.java",
+      "size": 1208
+    },
+    {
+      "hash": "144c08a2b715233547c403422d2b58126cfde2d701da2c644b9212b547178f88",
+      "path": "java_small/src/service/UserService.java",
+      "size": 805
+    },
+    {
+      "hash": "39ba21ca0d239ed58299345176165a560d616017fbbdfef0f9b72129139862f3",
+      "path": "java_small/src/service/impl/UserServiceImpl.java",
+      "size": 1909
+    },
+    {
+      "hash": "a130177852169cc5b043059208c40f93dbb4d7c94a364aa10d658041b7e055e2",
+      "path": "java_small/src/util/LoggerUtil.java",
+      "size": 1048
+    },
+    {
+      "hash": "d0a211d42a5f50d7228b77fd77b8adf093d6e3c73772a083b6b0348df82ce10d",
+      "path": "java_small/src/util/UnusedHelper.java",
+      "size": 676
+    }
+  ],
+  "language": "java",
+  "source_url": "local",
+  "total_loc": 267
+}

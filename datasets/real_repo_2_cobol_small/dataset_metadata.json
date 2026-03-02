@@ -1,0 +1,35 @@
+{
+  "dataset_hash": "367c118cac2ef8d33ffc4ffbca01de8604afcf4636be990d78b1c3e7a4de31fd",
+  "dataset_id": "real_repo_2_cobol_small",
+  "file_count": 5,
+  "files": [
+    {
+      "hash": "6d3f6970b326b7751728324798d8795df91b98d17054739184d768392b9221e5",
+      "path": "cobol_small/copybooks/common_data.cpy",
+      "size": 983
+    },
+    {
+      "hash": "fd5ab3b038fe46161e4107e023f051c218d660e6e3cc79e6073d1f2368e9f4dc",
+      "path": "cobol_small/main.cbl",
+      "size": 2431
+    },
+    {
+      "hash": "3660c81c29f8048bb5c21c3842fc848073895da273834db669c1cc1b1b684fbe",
+      "path": "cobol_small/payment.cbl",
+      "size": 2238
+    },
+    {
+      "hash": "d808f8cc0d1d32f9a437a71effb08bbad5107aed5495f60cd6f58833fcf7aadd",
+      "path": "cobol_small/unused_module.cbl",
+      "size": 720
+    },
+    {
+      "hash": "883d121311041e6cd99bbf57033800f776d5288e5267d2ccd631ab61fcdfadf1",
+      "path": "cobol_small/validation.cbl",
+      "size": 2338
+    }
+  ],
+  "language": "cobol",
+  "source_url": "local",
+  "total_loc": 226
+}

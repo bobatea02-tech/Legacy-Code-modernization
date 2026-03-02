@@ -2,11 +2,16 @@
 
 All API data transfer objects are defined here with strict typing
 and validation. No business logic - pure data models only.
+
+API Version: 1.0.0 (FROZEN - no schema changes allowed)
 """
 
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
+
+# API version - FROZEN
+API_VERSION = "1.0.0"
 
 
 class LanguageType(str, Enum):
@@ -56,6 +61,7 @@ class FileMetadataResponse(BaseModel):
 class UploadRepoResponse(BaseModel):
     """Response model for repository upload."""
     
+    api_version: str = Field(default=API_VERSION, description="API version")
     repository_id: str = Field(..., description="Unique repository identifier")
     status: str = Field(..., description="Ingestion status")
     file_count: int = Field(..., description="Number of files ingested", ge=0)
@@ -67,6 +73,9 @@ class UploadRepoResponse(BaseModel):
         default_factory=list,
         description="List of ingestion errors"
     )
+    
+    class Config:
+        extra = "forbid"  # Reject unknown fields
 
 
 # ============================================================================
@@ -137,6 +146,7 @@ class TranslationModuleResult(BaseModel):
 class TranslateResponse(BaseModel):
     """Response model for code translation."""
     
+    api_version: str = Field(default=API_VERSION, description="API version")
     repository_id: str = Field(..., description="Repository identifier")
     status: str = Field(..., description="Overall translation status")
     modules: List[TranslationModuleResult] = Field(
@@ -151,6 +161,9 @@ class TranslateResponse(BaseModel):
         default_factory=list,
         description="Pipeline errors"
     )
+    
+    class Config:
+        extra = "forbid"  # Reject unknown fields
 
 
 # ============================================================================
@@ -179,6 +192,7 @@ class GraphEdge(BaseModel):
 class DependencyGraphResponse(BaseModel):
     """Response model for dependency graph."""
     
+    api_version: str = Field(default=API_VERSION, description="API version")
     repository_id: str = Field(..., description="Repository identifier")
     nodes: List[GraphNode] = Field(
         default_factory=list,
@@ -192,6 +206,9 @@ class DependencyGraphResponse(BaseModel):
         default_factory=dict,
         description="Graph statistics"
     )
+    
+    class Config:
+        extra = "forbid"  # Reject unknown fields
 
 
 # ============================================================================
@@ -234,6 +251,7 @@ class DocumentationModule(BaseModel):
 class ReportResponse(BaseModel):
     """Response model for comprehensive report."""
     
+    api_version: str = Field(default=API_VERSION, description="API version")
     repository_id: str = Field(..., description="Repository identifier")
     validation_summary: Dict[str, Any] = Field(
         default_factory=dict,
@@ -251,6 +269,9 @@ class ReportResponse(BaseModel):
         default_factory=dict,
         description="Overall statistics"
     )
+    
+    class Config:
+        extra = "forbid"  # Reject unknown fields
 
 
 # ============================================================================

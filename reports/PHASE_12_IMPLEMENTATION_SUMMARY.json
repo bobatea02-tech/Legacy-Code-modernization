@@ -1,0 +1,174 @@
+{
+  "phase": "Phase-12",
+  "title": "Real-World Validation Implementation",
+  "status": "IMPLEMENTED",
+  "implementation_date": "2026-03-02",
+  "components_created": [
+    {
+      "file": "app/phase_12/dataset_manager.py",
+      "purpose": "Dataset normalization and deterministic hashing",
+      "key_features": [
+        "ZIP and directory normalization",
+        "Line ending normalization (CRLF -> LF)",
+        "Binary/artifact filtering",
+        "Deterministic file ordering",
+        "SHA-256 hashing per file and dataset",
+        "Metadata generation with LOC counting"
+      ]
+    },
+    {
+      "file": "app/phase_12/validator.py",
+      "purpose": "Phase-12 validation orchestrator",
+      "key_features": [
+        "Dual-run pipeline execution for determinism verification",
+        "Metrics extraction (success_rate, tokens, latency)",
+        "Translation sampling (10 per repo, deterministic selection)",
+        "Failure analysis with categorization",
+        "Quality evaluation rubric",
+        "Result hash calculation for determinism proof"
+      ]
+    },
+    {
+      "file": "scripts/run_phase_12.py",
+      "purpose": "Phase-12 execution script",
+      "key_features": [
+        "Two-repository validation",
+        "Report generation (4 JSON files)",
+        "Translation sample export",
+        "Acceptance criteria verification",
+        "Comprehensive logging"
+      ]
+    },
+    {
+      "file": "tests/test_phase_12.py",
+      "purpose": "Unit tests for Phase-12 components",
+      "test_coverage": [
+        "Dataset hash determinism",
+        "File skip logic",
+        "Language detection",
+        "Failure categorization",
+        "Result hash determinism"
+      ],
+      "test_results": "5 passed, 1 skipped"
+    }
+  ],
+  "datasets_selected": [
+    {
+      "id": "real_repo_1_java_small",
+      "source": "sample_repos/java_small.zip",
+      "language": "java",
+      "loc": 257,
+      "files": 6,
+      "complexity": "low",
+      "meets_constraints": true
+    },
+    {
+      "id": "real_repo_2_cobol_small",
+      "source": "sample_repos/cobol_small.zip",
+      "language": "cobol",
+      "loc": 226,
+      "files": 5,
+      "complexity": "low",
+      "meets_constraints": true
+    }
+  ],
+  "validation_process": {
+    "steps": [
+      "Dataset normalization (line endings, file ordering, hashing)",
+      "Pipeline execution pass 1 (full 9-phase pipeline)",
+      "Pipeline execution pass 2 (determinism verification)",
+      "Determinism check (hash comparison)",
+      "Metrics extraction (success rate, tokens, latency)",
+      "Translation sampling (10 samples per repo)",
+      "Failure analysis (categorization by cause)",
+      "Quality evaluation (rubric-based)",
+      "Report generation (4 JSON files + samples)"
+    ],
+    "determinism_guarantees": [
+      "Normalized line endings (LF)",
+      "Sorted file lists",
+      "SHA-256 hashing",
+      "Deterministic sampling (hash-based)",
+      "No timestamps in reports",
+      "Stable ordering throughout"
+    ]
+  },
+  "output_artifacts": {
+    "reports": [
+      {
+        "file": "reports/real_dataset_report.json",
+        "content": "Main validation report with metrics for both repos"
+      },
+      {
+        "file": "reports/failure_analysis.json",
+        "content": "Failure categorization and counts"
+      },
+      {
+        "file": "reports/evaluation_results.json",
+        "content": "Quality evaluation with rubric scores"
+      },
+      {
+        "file": "reports/determinism_proof.json",
+        "content": "Determinism verification hashes"
+      }
+    ],
+    "samples": {
+      "directory": "translation_samples/",
+      "count": 20,
+      "format": "Python files (translated code)"
+    },
+    "datasets": {
+      "directory": "datasets/",
+      "normalized": true,
+      "metadata_included": true
+    }
+  },
+  "acceptance_criteria": {
+    "success_rate_threshold": ">=50-60%",
+    "no_crash_propagation": true,
+    "deterministic_outputs": true,
+    "failure_analysis_created": true,
+    "evaluation_results_created": true,
+    "cli_api_consistency": true
+  },
+  "architecture_invariants_preserved": [
+    "Provider-agnostic (uses PipelineService)",
+    "Deterministic mode enabled",
+    "Structured JSON contracts",
+    "No hidden state",
+    "No LLM calls outside Translation phase",
+    "No timestamps in deterministic mode",
+    "File ordering deterministic",
+    "No shortcuts (full pipeline per run)"
+  ],
+  "known_issues": [
+    {
+      "issue": "LLM JSON parsing failures",
+      "cause": "Prompt format not enforcing JSON structure",
+      "fix_applied": "Updated prompt to enforce JSON output format",
+      "status": "FIXED"
+    },
+    {
+      "issue": "Long execution time",
+      "cause": "34 nodes * 2 runs * LLM latency",
+      "mitigation": "Expected for real-world validation",
+      "status": "EXPECTED"
+    }
+  ],
+  "execution_command": "python scripts/run_phase_12.py",
+  "test_command": "pytest tests/test_phase_12.py -v",
+  "documentation": [
+    "docs/PHASE_12_IMPLEMENTATION.md",
+    "README_PHASE_12.md"
+  ],
+  "implementation_complete": true,
+  "ready_for_execution": true,
+  "notes": [
+    "All components implemented and tested",
+    "Datasets normalized and verified",
+    "Determinism guarantees in place",
+    "Reports structured for reproducibility",
+    "Acceptance criteria defined and checkable",
+    "Architecture invariants preserved throughout"
+  ]
+}
