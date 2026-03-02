@@ -1,0 +1,16 @@
+{
+  "dataset": {
+    "name": "java_small",
+    "path": "sample_repos/java_small.zip",
+    "source_language": "java",
+    "target_language": "python",
+    "description": "Fixed snapshot of 6-file Java project with cross-file dependencies"
+  },
+  "benchmark_settings": {
+    "deterministic_mode": true,
+    "runs_for_verification": 2,
+    "profiling_enabled": true,
+    "output_directory": "benchmark_output"
+  },
+  "metrics_schema_version": "1.0.0"
+}
