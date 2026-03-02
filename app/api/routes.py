@@ -244,10 +244,23 @@ async def translate(
         
         logger.info(f"Starting translation pipeline for {repo_id}")
         
+        # Determine source language
+        if request.source_language:
+            source_language = request.source_language.value
+        else:
+            # Auto-detect from first file's language
+            if file_metadata_list:
+                source_language = file_metadata_list[0].language
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot detect source language from empty repository"
+                )
+        
         # Execute centralized pipeline
         pipeline_result = await pipeline_service.execute_full_pipeline(
             repo_path=temp_zip_path,
-            source_language="java",  # TODO: detect from request
+            source_language=source_language,
             target_language=request.target_language.value,
             repository_id=repo_id
         )

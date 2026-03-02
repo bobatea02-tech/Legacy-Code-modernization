@@ -27,6 +27,11 @@ class Settings(BaseSettings):
         description="Maximum token limit for context",
     )
 
+    DETERMINISTIC_MODE: bool = Field(
+        default=False,
+        description="Enable deterministic execution (no timestamps, stable ordering)",
+    )
+
     CONTEXT_EXPANSION_DEPTH: int = Field(
         default=3,
         ge=1,

@@ -29,6 +29,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+settings = get_settings()
 
 
 @dataclass
@@ -130,6 +131,14 @@ class AuditEngine:
         # Calculate execution time
         execution_time_ms = (time.time() - start_time) * 1000
         
+        # Create deterministic timestamp
+        if settings.DETERMINISTIC_MODE:
+            import hashlib
+            repo_hash = hashlib.sha256(str(len(translation_results)).encode()).hexdigest()[:16]
+            timestamp = f"deterministic-{repo_hash}"
+        else:
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        
         # Create audit report
         report = AuditReport(
             overall_passed=overall_passed,
@@ -138,7 +147,7 @@ class AuditEngine:
             failed_checks=failed_checks,
             check_results=check_results,
             execution_time_ms=execution_time_ms,
-            timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
+            timestamp=timestamp,
             summary=summary
         )
         

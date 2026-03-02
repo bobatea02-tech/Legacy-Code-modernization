@@ -15,9 +15,11 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 import time
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+settings = get_settings()
 
 
 @dataclass
@@ -199,6 +201,14 @@ class PipelineEvaluator:
         # Extract prompt metadata (new format with checksum and model_name)
         prompt_metadata = evaluation_input.phase_metadata.get("prompt_metadata", {})
         
+        # Create deterministic timestamp
+        if settings.DETERMINISTIC_MODE:
+            # Use repo_id hash as deterministic timestamp
+            import hashlib
+            timestamp = f"deterministic-{hashlib.sha256(evaluation_input.repo_id.encode()).hexdigest()[:16]}"
+        else:
+            timestamp = datetime.now(timezone.utc).isoformat()
+        
         # Create report
         report = EvaluationReport(
             repo_id=evaluation_input.repo_id,
@@ -206,7 +216,7 @@ class PipelineEvaluator:
             runtime_metrics=runtime_metrics,
             quality_metrics=quality_metrics,
             summary_text=summary_text,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=timestamp,
             prompt_versions=prompt_versions,
             prompt_metadata=prompt_metadata
         )

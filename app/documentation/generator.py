@@ -14,9 +14,11 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+settings = get_settings()
 
 
 @dataclass
@@ -162,6 +164,13 @@ class DocumentationGenerator:
             # Fallback to old format
             prompt_metadata = {"versions": evaluation_report["prompt_versions"]}
         
+        # Create deterministic timestamp
+        if settings.DETERMINISTIC_MODE:
+            import hashlib
+            timestamp = f"deterministic-{hashlib.sha256(translation_result.module_name.encode()).hexdigest()[:16]}"
+        else:
+            timestamp = datetime.now(timezone.utc).isoformat()
+        
         # Create report
         report = DocumentationReport(
             module_name=translation_result.module_name,
@@ -169,7 +178,7 @@ class DocumentationGenerator:
             validation_status=validation_status,
             evaluation_metrics=evaluation_metrics,
             prompt_metadata=prompt_metadata,
-            timestamp=datetime.now(timezone.utc).isoformat()
+            timestamp=timestamp
         )
         
         logger.debug(

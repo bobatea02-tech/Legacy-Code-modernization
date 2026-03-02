@@ -16,10 +16,12 @@ from datetime import datetime, timezone
 import hashlib
 import re
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.prompt_versioning.schema import PromptBundle
 
 logger = get_logger(__name__)
+settings = get_settings()
 
 
 # ============================================================================
@@ -255,8 +257,11 @@ class PromptVersionManager:
         # Compute checksum
         checksum = self._compute_checksum(content)
         
-        # Create timestamp
-        created_at = datetime.now(timezone.utc).isoformat()
+        # Create timestamp (deterministic mode uses checksum as timestamp)
+        if settings.DETERMINISTIC_MODE:
+            created_at = f"deterministic-{checksum[:16]}"
+        else:
+            created_at = datetime.now(timezone.utc).isoformat()
         
         # Create prompt template
         prompt = PromptTemplate(
