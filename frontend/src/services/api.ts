@@ -284,6 +284,14 @@ class ApiClient {
     if (!response.ok) throw new ApiError(response.status, "Download failed");
     return response.blob();
   }
+
+  /** Download a specific artifact ZIP by key */
+  async downloadArtifact(runId: string, artifact: string): Promise<Blob> {
+    const url = `${this.baseUrl}/results/download/${runId}/${artifact}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new ApiError(response.status, `Download failed: ${artifact}`);
+    return response.blob();
+  }
 }
 
 export class ApiError extends Error {

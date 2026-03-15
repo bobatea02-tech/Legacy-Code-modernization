@@ -26,11 +26,10 @@ const ResultsView = () => {
   const downloadDisabled = !pipelineComplete || (determinism.hash_match === false);
 
   const handleDownload = async (artifactKey: string) => {
-    // Only modernized_repo is supported by the backend
     if (!runId || !useBackend) return;
 
     try {
-      const blob = await apiClient.downloadModernizedRepo(runId);
+      const blob = await apiClient.downloadArtifact(runId, artifactKey);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

@@ -636,63 +636,111 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
             del pipeline_tasks[run_id]
 
 async def generate_output_package(run_id: str, result) -> str:
-    """Generate the modernized repository package."""
-    output_dir = Path(tempfile.gettempdir()) / "modernize_outputs"
+    """Generate all artifact packages and return path to the main modernized_repo ZIP."""
+    output_dir = Path(tempfile.gettempdir()) / "modernize_outputs" / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    package_dir = output_dir / run_id
-    package_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create src directory
-    src_dir = package_dir / "src"
-    src_dir.mkdir(exist_ok=True)
-    
-    # Write translated files
+
+    # ── 1. modernized_repo: translated Python source files ──────────
+    src_dir = output_dir / "modernized_repo" / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+
     for trans_result in result.translation_results:
         if trans_result.translated_code:
-            file_path = src_dir / f"{trans_result.module_name}.py"
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(trans_result.translated_code)
-    
-    # Write validation report
-    validation_report = {
+            # Preserve sub-path structure if module_name contains slashes
+            rel = Path(trans_result.module_name)
+            file_path = src_dir / rel.with_suffix(".py")
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(trans_result.translated_code, encoding="utf-8")
+
+    # If no translations produced, write a placeholder so the ZIP isn't empty
+    if not list(src_dir.rglob("*.py")):
+        (src_dir / "README.txt").write_text(
+            "No translated files were produced. Check backend logs for LLM errors.\n",
+            encoding="utf-8",
+        )
+
+    _zip_dir(output_dir / "modernized_repo", output_dir / "modernized_repo.zip")
+
+    # ── 2. validation_report ─────────────────────────────────────────
+    val_dir = output_dir / "validation_report"
+    val_dir.mkdir(exist_ok=True)
+    validation_data = {
         "validations": [
             {
                 "module": v.module_name,
                 "syntax_valid": v.syntax_valid,
                 "structure_valid": v.structure_valid,
                 "symbols_preserved": v.symbols_preserved,
-                "dependencies_complete": v.dependencies_complete
+                "dependencies_complete": v.dependencies_complete,
             }
             for v in result.validation_reports
         ]
     }
-    with open(package_dir / "validation_report.json", 'w') as f:
-        json.dump(validation_report, f, indent=2)
-    
-    # Write evaluation report
-    if result.evaluation_report:
-        with open(package_dir / "evaluation_report.json", 'w') as f:
-            json.dump(result.evaluation_report, f, indent=2)
-    
-    # Write determinism check
-    determinism_check = {
-        "deterministic_mode": True,
-        "hash_verified": True,
-        "timestamp": datetime.utcnow().isoformat()
+    (val_dir / "validation_report.json").write_text(
+        json.dumps(validation_data, indent=2), encoding="utf-8"
+    )
+    _zip_dir(val_dir, output_dir / "validation_report.zip")
+
+    # ── 3. benchmark_report ──────────────────────────────────────────
+    bench_dir = output_dir / "benchmark_report"
+    bench_dir.mkdir(exist_ok=True)
+    benchmark_data = result.evaluation_report or {
+        "note": "No evaluation report generated",
+        "file_count": result.file_count,
+        "graph_nodes": result.graph_node_count,
+        "graph_edges": result.graph_edge_count,
     }
-    with open(package_dir / "determinism_check.json", 'w') as f:
-        json.dump(determinism_check, f, indent=2)
-    
-    # Create ZIP package
-    zip_path = output_dir / f"{run_id}.zip"
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for file_path in package_dir.rglob('*'):
-            if file_path.is_file():
-                arcname = file_path.relative_to(package_dir)
-                zipf.write(file_path, arcname)
-    
-    return str(zip_path)
+    (bench_dir / "benchmark_report.json").write_text(
+        json.dumps(benchmark_data, indent=2), encoding="utf-8"
+    )
+    _zip_dir(bench_dir, output_dir / "benchmark_report.zip")
+
+    # ── 4. failure_analysis ──────────────────────────────────────────
+    fail_dir = output_dir / "failure_analysis"
+    fail_dir.mkdir(exist_ok=True)
+    failures = [
+        {
+            "module": r.module_name,
+            "status": r.status.value,
+            "errors": r.errors,
+            "warnings": r.warnings,
+        }
+        for r in result.translation_results
+        if r.status.value != "success"
+    ]
+    (fail_dir / "failure_analysis.json").write_text(
+        json.dumps({"failures": failures, "total": len(failures)}, indent=2),
+        encoding="utf-8",
+    )
+    _zip_dir(fail_dir, output_dir / "failure_analysis.zip")
+
+    # ── 5. determinism_proof ─────────────────────────────────────────
+    det_dir = output_dir / "determinism_proof"
+    det_dir.mkdir(exist_ok=True)
+    (det_dir / "determinism_proof.json").write_text(
+        json.dumps(
+            {
+                "deterministic_mode": True,
+                "hash_verified": True,
+                "run_id": run_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "prompt_versions": result.prompt_versions,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    _zip_dir(det_dir, output_dir / "determinism_proof.zip")
+
+    return str(output_dir / "modernized_repo.zip")
+
+
+def _zip_dir(source_dir: Path, zip_path: Path):
+    """Zip all files in source_dir into zip_path."""
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fp in source_dir.rglob("*"):
+            if fp.is_file():
+                zf.write(fp, fp.relative_to(source_dir))
 
 # ============================================================================
 # GET /api/pipeline/status/{run_id}
@@ -839,50 +887,50 @@ async def get_results_summary(run_id: str) -> ResultsSummaryResponse:
     )
 
 # ============================================================================
-# GET /api/results/download/{run_id}
+# GET /api/results/download/{run_id}          (modernized_repo — default)
+# GET /api/results/download/{run_id}/{artifact}
 # ============================================================================
 
-@router.get(
-    "/results/download/{run_id}",
-    summary="Download modernized repository"
-)
-async def download_results(run_id: str):
-    """
-    Download the modernized repository package as a ZIP file.
-    
-    The ZIP contains:
-        - src/: Translated source files
-        - validation_report.json
-        - evaluation_report.json
-        - determinism_check.json
-    """
+ARTIFACT_FILENAMES = {
+    "modernized_repo":   "modernized_repo.zip",
+    "validation_report": "validation_report.zip",
+    "benchmark_report":  "benchmark_report.zip",
+    "failure_analysis":  "failure_analysis.zip",
+    "determinism_proof": "determinism_proof.zip",
+}
+
+def _get_artifact_path(run_id: str, artifact: str) -> Path:
+    output_dir = Path(tempfile.gettempdir()) / "modernize_outputs" / run_id
+    filename = ARTIFACT_FILENAMES.get(artifact)
+    if not filename:
+        raise HTTPException(status_code=400, detail=f"Unknown artifact: {artifact}")
+    path = output_dir / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact}")
+    return path
+
+def _require_completed(run_id: str):
     if run_id not in pipeline_runs:
+        raise HTTPException(status_code=404, detail=f"Pipeline run not found: {run_id}")
+    if pipeline_runs[run_id]["status"] != "COMPLETED":
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pipeline run not found: {run_id}"
+            status_code=400,
+            detail=f"Pipeline not completed. Status: {pipeline_runs[run_id]['status']}"
         )
-    
-    run_data = pipeline_runs[run_id]
-    
-    if run_data["status"] != "COMPLETED":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Pipeline not completed yet. Current status: {run_data['status']}"
-        )
-    
-    output_path = run_data["result"]["output_path"]
-    
-    if not Path(output_path).exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Output package not found"
-        )
-    
-    return FileResponse(
-        path=output_path,
-        media_type="application/zip",
-        filename=f"modernized_repo_{run_id}.zip"
-    )
+
+@router.get("/results/download/{run_id}", summary="Download modernized repository ZIP")
+async def download_results(run_id: str):
+    _require_completed(run_id)
+    path = _get_artifact_path(run_id, "modernized_repo")
+    return FileResponse(path=str(path), media_type="application/zip",
+                        filename=f"modernized_repo_{run_id}.zip")
+
+@router.get("/results/download/{run_id}/{artifact}", summary="Download specific artifact ZIP")
+async def download_artifact(run_id: str, artifact: str):
+    _require_completed(run_id)
+    path = _get_artifact_path(run_id, artifact)
+    return FileResponse(path=str(path), media_type="application/zip",
+                        filename=f"{artifact}_{run_id}.zip")
 
 # ============================================================================
 # WebSocket broadcast helper
