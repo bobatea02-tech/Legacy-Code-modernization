@@ -487,7 +487,7 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
 
         # Broadcast metrics after translation
         files_processed = len(result.translation_results)
-        dep_nodes = len(result.dependency_graph.nodes) if result.dependency_graph else 0
+        dep_nodes = result.graph_node_count
         tokens_used = sum(r.token_usage for r in result.translation_results)
 
         await complete_phase("TRANSLATION", nodes=files_processed, duration_ms=0)
