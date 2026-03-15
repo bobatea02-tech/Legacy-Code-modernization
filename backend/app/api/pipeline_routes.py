@@ -486,17 +486,18 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
             return
 
         # Broadcast metrics after translation
-        files_processed = len(result.translation_results)
+        files_processed = result.file_count if result.file_count > 0 else len(result.translation_results)
+        translated_count = len(result.translation_results)
         dep_nodes = result.graph_node_count
         tokens_used = sum(r.token_usage for r in result.translation_results)
 
-        await complete_phase("TRANSLATION", nodes=files_processed, duration_ms=0)
+        await complete_phase("TRANSLATION", nodes=translated_count, duration_ms=0)
         await ws_broadcast(run_id, {
             "type": "METRICS_UPDATE",
             "run_id": run_id,
             "total_files": files_processed,
             "total_dependency_nodes": dep_nodes,
-            "avg_tokens_per_slice": tokens_used // max(files_processed, 1),
+            "avg_tokens_per_slice": tokens_used // max(translated_count, 1),
             "total_tokens": tokens_used,
             "dead_code_pruned_pct": 41,
         })
@@ -546,7 +547,7 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
 
         # ── Finalise ────────────────────────────────────────────────
         success_count = sum(1 for r in result.translation_results if r.status.value == "success")
-        success_rate = success_count / max(files_processed, 1)
+        success_rate = success_count / max(translated_count, 1)
 
         pipeline_runs[run_id]["status"] = "COMPLETED"
         pipeline_runs[run_id]["phase"] = "COMPLETED"
@@ -564,17 +565,15 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
             "dependency_nodes": dep_nodes,
             "tokens_used": tokens_used,
         }
-
-        # Broadcast PIPELINE_COMPLETE to all WebSocket clients
         await ws_broadcast(run_id, {
             "type": "PIPELINE_COMPLETE",
             "run_id": run_id,
             "results": {
                 "files_processed": files_processed,
                 "successful_translations": success_count,
-                "success_rate": success_rate * 100,
+                "success_rate": round(success_rate * 100, 1),
                 "avg_latency_per_file_ms": 0,
-                "token_efficiency_ratio": 1 - 0.41,
+                "token_efficiency_ratio": round(1 - 0.41, 2),
             },
             "validation_report": {
                 "syntax_valid": True,
@@ -589,7 +588,7 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
                 "latency_distribution": [],
                 "token_distribution": [],
                 "success_count": success_count,
-                "failure_count": files_processed - success_count,
+                "failure_count": translated_count - success_count,
             },
         })
 

@@ -20,7 +20,7 @@ const ResultsView = () => {
     { label: "SUCCESSFUL", value: results.successful_translations },
     { label: "SUCCESS_RATE", value: `${results.success_rate}%` },
     { label: "AVG_LATENCY", value: `${results.avg_latency_per_file_ms}ms` },
-    { label: "TOKEN_EFFICIENCY", value: results.token_efficiency_ratio },
+    { label: "TOKEN_EFFICIENCY", value: `${(results.token_efficiency_ratio * 100).toFixed(1)}%` },
   ];
 
   const downloadDisabled = !pipelineComplete || (determinism.hash_match === false);
