@@ -2,7 +2,8 @@ import { usePipelineStore, PhaseStatus } from "@/stores/pipelineStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Loader2, RefreshCw, AlertTriangle, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import PageBackground from "@/components/PageBackground";
 import { apiClient, ApiError } from "@/services/api";
 
@@ -30,6 +31,15 @@ const PipelineView = () => {
 
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const navigate = useNavigate();
+
+  // Redirect to results when pipeline completes
+  useEffect(() => {
+    if (pipelineComplete) {
+      navigate("/results");
+    }
+  }, [pipelineComplete, navigate]);
 
   // Connect WebSocket when backend is active
   const { connectionStatus } = useWebSocket(useBackend && runId ? runId : null);

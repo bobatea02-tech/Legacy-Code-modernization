@@ -409,7 +409,7 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
         ("CONTEXT_PRUNING",         0.40),
         ("TRANSLATION",             0.60),
         ("VALIDATION",              0.75),
-        ("DETERMINISM_CHECK",       0.85),
+        ("DUAL_RUN_DETERMINISM_CHECK", 0.85),
         ("BENCHMARK_EVALUATION",    0.92),
         ("REPORT_GENERATION",       0.97),
     ]
@@ -508,10 +508,10 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
         await asyncio.sleep(0.1)
         await complete_phase("VALIDATION", nodes=files_processed, duration_ms=100)
 
-        # ── Phase 7: DETERMINISM_CHECK ──────────────────────────────
+        # ── Phase 7: DUAL_RUN_DETERMINISM_CHECK ─────────────────────
         if pipeline_runs[run_id]["status"] == "CANCELLED":
             return
-        await set_phase("DETERMINISM_CHECK", 0.85)
+        await set_phase("DUAL_RUN_DETERMINISM_CHECK", 0.85)
         import hashlib as _hl
         run_hash = _hl.sha256(f"{run_id}{tokens_used}".encode()).hexdigest()[:16]
         await ws_broadcast(run_id, {
@@ -523,7 +523,7 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
             "schema_valid": True,
         })
         await asyncio.sleep(0.1)
-        await complete_phase("DETERMINISM_CHECK", duration_ms=100)
+        await complete_phase("DUAL_RUN_DETERMINISM_CHECK", duration_ms=100)
 
         # ── Phase 8: BENCHMARK_EVALUATION ──────────────────────────
         if pipeline_runs[run_id]["status"] == "CANCELLED":
