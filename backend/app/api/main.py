@@ -35,6 +35,10 @@ app.include_router(router, prefix="/api/v1", tags=["Translation Pipeline"])
 from app.api.pipeline_routes import router as pipeline_router
 app.include_router(pipeline_router, prefix="/api", tags=["Pipeline"])
 
+# Mount pipeline WebSocket routes under /api/v1 so the frontend path
+# /api/v1/pipeline/{run_id}/ws resolves correctly
+app.include_router(pipeline_router, prefix="/api/v1", tags=["Pipeline WS"], include_in_schema=False)
+
 
 @app.get("/", tags=["Health"])
 async def root():
