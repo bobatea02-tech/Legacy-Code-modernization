@@ -345,8 +345,8 @@ class TranslationOrchestrator:
                 system_prompt=prompt_bundle.system_prompt,
                 user_prompt=prompt_bundle.user_prompt,
                 max_tokens=self.settings.MAX_TOKEN_LIMIT,
-                temperature=0.3,  # Lower temperature for more deterministic translation
-                force_json=True  # Enable JSON mode for structured output
+                temperature=0.3,
+                force_json=False  # Gemini 2.5 requires response_schema for JSON mode; parse manually
             )
             
             # Parse and validate JSON response
@@ -546,49 +546,53 @@ class TranslationOrchestrator:
         node_name: str,
         node_type: str
     ) -> PromptBundle:
-        """Build structured translation prompt bundle.
-        
-        Args:
-            source_code: Source code to translate
-            target_language: Target programming language
-            node_name: Name of the node being translated
-            node_type: Type of the node (function, class, etc.)
-            
-        Returns:
-            PromptBundle with system and user prompts
-        """
-        # Sanitize source code to prevent token overflow
+        """Build structured translation prompt bundle."""
         sanitized_source = self._sanitize_code(source_code)
-        
-        # Get prompt bundle from version manager
+
+        # Load prompt directly from file — bypasses in-memory manager
+        # which loses state between calls due to re-instantiation
         try:
-            prompt_bundle = self.prompt_manager.get_prompt_bundle("code_translation")
+            backend_dir = Path(__file__).parent.parent.parent
+            prompt_file = backend_dir.parent / "prompts" / "code_translation.txt"
+            content = prompt_file.read_text(encoding="utf-8")
+
+            if "SYSTEM:" in content and "USER:" in content:
+                parts = content.split("USER:", 1)
+                system_part = parts[0].replace("SYSTEM:", "").strip()
+                user_part = parts[1].strip()
+            else:
+                system_part = content
+                user_part = (
+                    "Translate the following {node_type} named '{node_name}' "
+                    "to {target_language}:\n\n{source_code}"
+                )
+
+            prompt_version = "1.0.0"
         except Exception as e:
-            logger.error(
-                f"Failed to load prompt bundle: {e}",
-                extra={"stage_name": "translation_orchestration", "error": str(e)}
+            logger.warning(f"Could not load prompt file, using fallback: {e}")
+            system_part = (
+                "You are a code translation assistant. "
+                "Translate the provided legacy code to modern Python. "
+                "Return ONLY valid JSON with keys: translated_code, dependencies, notes."
             )
-            # Fallback to basic prompts
-            prompt_bundle = PromptBundle(
-                system_prompt="You are a code translation assistant. Translate the provided code accurately.",
-                user_prompt="Translate the following code to {target_language}:\n\n{source_code}",
-                version="fallback",
-                metadata={}
+            user_part = (
+                "Translate the following {node_type} named '{node_name}' "
+                "to {target_language}:\n\n{source_code}"
             )
-        
-        # Format user prompt with actual values
-        formatted_user_prompt = prompt_bundle.user_prompt.format(
+            prompt_version = "fallback"
+
+        formatted_user = user_part.format(
             node_type=node_type,
             node_name=node_name,
             target_language=target_language,
-            source_code=sanitized_source
+            source_code=sanitized_source,
         )
-        
+
         return PromptBundle(
-            system_prompt=prompt_bundle.system_prompt,
-            user_prompt=formatted_user_prompt,
-            version=prompt_bundle.version,
-            metadata=prompt_bundle.metadata
+            system_prompt=system_part,
+            user_prompt=formatted_user,
+            version=prompt_version,
+            metadata={},
         )
     
     def get_translation_statistics(self, results: List[TranslationResult]) -> Dict[str, any]:
