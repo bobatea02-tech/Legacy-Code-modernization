@@ -378,12 +378,17 @@ async def start_pipeline(
         "error": None
     }
     
+    # Auto-detect source language from ZIP contents
+    source_language = _detect_language_from_zip(repo_data["file_path"])
+    logger.info(f"Auto-detected source language: {source_language} for repo: {request.repo_id}")
+
     # Start pipeline in background and store the task
     task = asyncio.create_task(
         execute_pipeline(
             run_id=run_id,
             repo_path=repo_data["file_path"],
-            target_language=request.target_language
+            target_language=request.target_language,
+            source_language=source_language,
         )
     )
     pipeline_tasks[run_id] = task
@@ -396,10 +401,32 @@ async def start_pipeline(
     )
 
 # ============================================================================
+# Language Detection Helper
+# ============================================================================
+
+def _detect_language_from_zip(zip_path: str) -> str:
+    """Detect source language by counting file extensions in the ZIP."""
+    java_exts = {'.java'}
+    cobol_exts = {'.cbl', '.cob', '.cpy'}
+    counts = {'java': 0, 'cobol': 0}
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            for name in zf.namelist():
+                ext = Path(name).suffix.lower()
+                if ext in java_exts:
+                    counts['java'] += 1
+                elif ext in cobol_exts:
+                    counts['cobol'] += 1
+    except Exception:
+        pass
+    return max(counts, key=counts.get) if any(counts.values()) else 'java'
+
+
+# ============================================================================
 # Background Pipeline Execution
 # ============================================================================
 
-async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
+async def execute_pipeline(run_id: str, repo_path: str, target_language: str, source_language: str = "java"):
     """Execute the full modernization pipeline in background."""
 
     PHASE_MAP = [
@@ -477,7 +504,7 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str):
 
         result = await pipeline_service.execute_full_pipeline(
             repo_path=repo_path,
-            source_language="java",
+            source_language=source_language,
             target_language=target_language,
             repository_id=run_id
         )
@@ -646,9 +673,15 @@ async def generate_output_package(run_id: str, result) -> str:
 
     for trans_result in result.translation_results:
         if trans_result.translated_code:
-            # Preserve sub-path structure if module_name contains slashes
-            rel = Path(trans_result.module_name)
-            file_path = src_dir / rel.with_suffix(".py")
+            # module_name is a node ID like "path/to/File.java:ClassName:10"
+            # Extract just the base name part before the first colon
+            raw_name = trans_result.module_name.split(":")[0]  # e.g. "path/to/File.java"
+            # Strip source extension and use as Python module path
+            base = Path(raw_name).with_suffix("")  # e.g. Path("path/to/File")
+            # Sanitize: replace non-alphanumeric (except / and _) with _
+            import re as _re
+            clean_parts = [_re.sub(r'[^\w]', '_', p) for p in base.parts]
+            file_path = src_dir / Path(*clean_parts).with_suffix(".py")
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(trans_result.translated_code, encoding="utf-8")
 

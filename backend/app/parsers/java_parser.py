@@ -46,12 +46,25 @@ class JavaParser(BaseParser):
             # Extract imports
             imports = re.findall(r'import\s+([\w.]+);', content)
             
-            # Extract class definitions
+            lines = content.splitlines()
+            total_lines = len(lines)
+
+            # Extract class definitions — one node per class, raw_source = full class body
             class_pattern = r'(?:public|private|protected)?\s*(?:abstract|final)?\s*class\s+(\w+)'
-            for match in re.finditer(class_pattern, content):
+            class_matches = list(re.finditer(class_pattern, content))
+
+            for i, match in enumerate(class_matches):
                 class_name = match.group(1)
                 start_line = content[:match.start()].count('\n') + 1
-                
+
+                # Determine end line: next class start or EOF
+                if i + 1 < len(class_matches):
+                    end_line = content[:class_matches[i + 1].start()].count('\n')
+                else:
+                    end_line = total_lines
+
+                raw = "\n".join(lines[start_line - 1:end_line])
+
                 node = ASTNode(
                     id=f"{file_path}:{class_name}:{start_line}",
                     name=class_name,
@@ -62,34 +75,25 @@ class JavaParser(BaseParser):
                     imports=imports,
                     file_path=file_path,
                     start_line=start_line,
-                    end_line=start_line + 10,  # Mock end line
-                    raw_source=match.group(0)
+                    end_line=end_line,
+                    raw_source=raw,
                 )
                 nodes.append(node)
-            
-            # Extract method definitions
-            method_pattern = r'(?:public|private|protected)?\s*(?:static)?\s*(\w+)\s+(\w+)\s*\((.*?)\)'
-            for match in re.finditer(method_pattern, content):
-                return_type = match.group(1)
-                method_name = match.group(2)
-                params = match.group(3)
-                start_line = content[:match.start()].count('\n') + 1
-                
-                # Parse parameters
-                param_list = [p.strip() for p in params.split(',') if p.strip()]
-                
+
+            # If no classes found, treat the whole file as one node
+            if not nodes:
                 node = ASTNode(
-                    id=f"{file_path}:{method_name}:{start_line}",
-                    name=method_name,
-                    node_type="method",
-                    parameters=param_list,
-                    return_type=return_type if return_type != "void" else None,
+                    id=f"{file_path}:module:1",
+                    name=re.sub(r'[^\w]', '_', file_path.split('/')[-1].replace('.java', '')),
+                    node_type="module",
+                    parameters=[],
+                    return_type=None,
                     called_symbols=[],
                     imports=imports,
                     file_path=file_path,
-                    start_line=start_line,
-                    end_line=start_line + 5,  # Mock end line
-                    raw_source=match.group(0)
+                    start_line=1,
+                    end_line=total_lines,
+                    raw_source=content,
                 )
                 nodes.append(node)
             
