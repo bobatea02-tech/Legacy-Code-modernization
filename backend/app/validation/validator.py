@@ -27,6 +27,7 @@ logger = get_logger(__name__)
 class ValidationReport:
     """Validation results for translated code."""
     
+    module_name: str
     structure_valid: bool
     symbols_preserved: bool
     syntax_valid: bool
@@ -110,6 +111,7 @@ class ValidationEngine:
         )
         
         return ValidationReport(
+            module_name=original_node.name,
             structure_valid=structure_valid,
             symbols_preserved=symbols_preserved,
             syntax_valid=syntax_valid,
