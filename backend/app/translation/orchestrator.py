@@ -145,17 +145,9 @@ class TranslationOrchestrator:
         target_language: str = "python"
     ) -> List[TranslationResult]:
         """Translate entire repository in dependency order.
-        
-        Args:
-            dependency_graph: NetworkX directed graph of dependencies
-            ast_index: Dictionary mapping node IDs to ASTNode objects
-            target_language: Target programming language (default: python)
-            
-        Returns:
-            List of TranslationResult objects
-            
-        Raises:
-            ValueError: If circular dependencies detected
+
+        Handles circular dependencies gracefully by breaking back-edges so
+        every node is still translated (COBOL PERFORM cycles are common).
         """
         logger.info(
             f"Starting repository translation to {target_language}",
@@ -165,42 +157,54 @@ class TranslationOrchestrator:
                 "node_count": dependency_graph.number_of_nodes()
             }
         )
-        
-        # Step 1: Detect circular dependencies
-        if not nx.is_directed_acyclic_graph(dependency_graph):
-            cycles = list(nx.simple_cycles(dependency_graph))
-            error_msg = f"Circular dependencies detected: {len(cycles)} cycles found"
-            logger.error(
-                error_msg,
+
+        # Step 1: If cycles exist, break them by removing back-edges so we can
+        # still do a topological sort.  All nodes will still be translated.
+        work_graph = dependency_graph.copy()
+        if not nx.is_directed_acyclic_graph(work_graph):
+            cycles = list(nx.simple_cycles(work_graph))
+            logger.warning(
+                f"Circular dependencies detected ({len(cycles)} cycles) — "
+                "breaking back-edges to allow full translation",
                 extra={
                     "stage_name": "translation_orchestration",
                     "cycle_count": len(cycles),
-                    "sample_cycles": cycles[:3]
+                    "sample_cycles": cycles[:3],
                 }
             )
-            raise ValueError(error_msg)
-        
-        # Step 2: Perform topological sort (leaf-first)
+            # Remove one back-edge per cycle (the last edge in the cycle list)
+            for cycle in cycles:
+                back_src = cycle[-1]
+                back_dst = cycle[0]
+                if work_graph.has_edge(back_src, back_dst):
+                    work_graph.remove_edge(back_src, back_dst)
+
+        # Step 2: Topological sort on the (now acyclic) work graph
         try:
-            sorted_nodes = list(nx.topological_sort(dependency_graph))
-            logger.info(
-                f"Topological sort complete: {len(sorted_nodes)} nodes",
-                extra={
-                    "stage_name": "translation_orchestration",
-                    "sorted_node_count": len(sorted_nodes)
-                }
-            )
+            sorted_nodes = list(nx.topological_sort(work_graph))
         except nx.NetworkXError as e:
-            logger.error(
-                f"Topological sort failed: {e}",
-                extra={"stage_name": "translation_orchestration", "error": str(e)}
-            )
-            raise ValueError(f"Failed to sort dependencies: {e}")
-        
+            # Fallback: just use insertion order from ast_index
+            logger.warning(f"Topological sort failed ({e}), using ast_index order")
+            sorted_nodes = list(ast_index.keys())
+
+        # Ensure every node in ast_index is covered (graph may be a subset)
+        graph_node_set = set(sorted_nodes)
+        for node_id in ast_index:
+            if node_id not in graph_node_set:
+                sorted_nodes.append(node_id)
+
+        logger.info(
+            f"Translation order resolved: {len(sorted_nodes)} nodes",
+            extra={"stage_name": "translation_orchestration", "sorted_node_count": len(sorted_nodes)}
+        )
+
         # Step 3: Translate each node in order
         results: List[TranslationResult] = []
-        
+
         for node_id in sorted_nodes:
+            # Skip nodes not in ast_index (graph-only phantom nodes)
+            if node_id not in ast_index:
+                continue
             try:
                 result = await self._translate_node(
                     node_id=node_id,
@@ -209,7 +213,7 @@ class TranslationOrchestrator:
                     target_language=target_language
                 )
                 results.append(result)
-                
+
             except Exception as e:
                 logger.error(
                     f"Failed to translate node {node_id}: {e}",
@@ -219,7 +223,6 @@ class TranslationOrchestrator:
                         "error": str(e)
                     }
                 )
-                # Create failed result and continue
                 results.append(TranslationResult(
                     module_name=node_id,
                     status=TranslationStatus.FAILED,

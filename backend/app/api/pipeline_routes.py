@@ -671,18 +671,24 @@ async def generate_output_package(run_id: str, result) -> str:
     src_dir = output_dir / "modernized_repo" / "src"
     src_dir.mkdir(parents=True, exist_ok=True)
 
+    import re as _re
+
     for trans_result in result.translation_results:
         if trans_result.translated_code:
-            # module_name is a node ID like "path/to/File.java:ClassName:10"
-            # Extract just the base name part before the first colon
-            raw_name = trans_result.module_name.split(":")[0]  # e.g. "path/to/File.java"
-            # Strip source extension and use as Python module path
-            base = Path(raw_name).with_suffix("")  # e.g. Path("path/to/File")
-            # Sanitize: replace non-alphanumeric (except / and _) with _
-            import re as _re
-            clean_parts = [_re.sub(r'[^\w]', '_', p) for p in base.parts]
-            file_path = src_dir / Path(*clean_parts).with_suffix(".py")
-            file_path.parent.mkdir(parents=True, exist_ok=True)
+            # module_name is a node ID like "/tmp/repo_ingest_xyz/repo/copybooks/PROG.cbl:MYPROG:1"
+            # or "path/to/File.java:ClassName:10"
+            # We want just the source filename stem as the output .py filename.
+            raw_path = trans_result.module_name.split(":")[0]  # full path portion
+            # Use only the filename stem (no directory, no extension)
+            stem = Path(raw_path).stem  # e.g. "MYPROG" or "UserService"
+            # Sanitize to valid Python identifier
+            safe_name = _re.sub(r'[^\w]', '_', stem) or "module"
+            file_path = src_dir / f"{safe_name}.py"
+            # Handle name collisions by appending a counter
+            counter = 1
+            while file_path.exists():
+                file_path = src_dir / f"{safe_name}_{counter}.py"
+                counter += 1
             file_path.write_text(trans_result.translated_code, encoding="utf-8")
 
     # If no translations produced, write a placeholder so the ZIP isn't empty
