@@ -674,22 +674,22 @@ async def generate_output_package(run_id: str, result) -> str:
     import re as _re
 
     for trans_result in result.translation_results:
-        if trans_result.translated_code:
-            # module_name is a node ID like "/tmp/repo_ingest_xyz/repo/copybooks/PROG.cbl:MYPROG:1"
-            # or "path/to/File.java:ClassName:10"
-            # We want just the source filename stem as the output .py filename.
-            raw_path = trans_result.module_name.split(":")[0]  # full path portion
-            # Use only the filename stem (no directory, no extension)
-            stem = Path(raw_path).stem  # e.g. "MYPROG" or "UserService"
-            # Sanitize to valid Python identifier
-            safe_name = _re.sub(r'[^\w]', '_', stem) or "module"
-            file_path = src_dir / f"{safe_name}.py"
-            # Handle name collisions by appending a counter
-            counter = 1
-            while file_path.exists():
-                file_path = src_dir / f"{safe_name}_{counter}.py"
-                counter += 1
-            file_path.write_text(trans_result.translated_code, encoding="utf-8")
+        if not trans_result.translated_code:
+            continue
+
+        # Derive output filename from source_file if available, else from module_name node ID
+        source_path = getattr(trans_result, "source_file", "") or trans_result.module_name.split(":")[0]
+        stem = Path(source_path).stem if source_path else "module"
+        safe_name = _re.sub(r'[^\w]', '_', stem).strip("_") or "module"
+
+        file_path = src_dir / f"{safe_name}.py"
+        # Handle name collisions
+        counter = 1
+        while file_path.exists():
+            file_path = src_dir / f"{safe_name}_{counter}.py"
+            counter += 1
+        file_path.write_text(trans_result.translated_code, encoding="utf-8")
+        logger.info(f"Wrote translated file: {file_path.name}")
 
     # If no translations produced, write a placeholder so the ZIP isn't empty
     if not list(src_dir.rglob("*.py")):
