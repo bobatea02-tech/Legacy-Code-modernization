@@ -24,6 +24,7 @@ from datetime import datetime
 from app.core.logging import get_logger
 from app.pipeline.service import PipelineService
 from app.core.config import get_settings
+from app.llm.quota_tracker import quota_tracker
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -92,6 +93,27 @@ async def health_check():
         "version": "1.0.0",
         "service": "legacy-code-modernization-engine"
     }
+
+# ============================================================================
+# GET /api/llm/status  — Gemini API quota status
+# POST /api/llm/reset-quota — manually reset quota counter
+# ============================================================================
+
+@router.get("/llm/status", summary="Gemini API quota and usage status")
+async def get_llm_status():
+    """
+    Returns current Gemini API quota usage.
+    Frontend polls this to show the API key usage indicator.
+    """
+    return quota_tracker.to_dict()
+
+
+@router.post("/llm/reset-quota", summary="Reset quota counter (after updating API key)")
+async def reset_llm_quota():
+    """Reset the quota tracker — call this after updating the API key in .env."""
+    quota_tracker.reset()
+    return {"message": "Quota counter reset", "status": quota_tracker.to_dict()}
+
 
 # ============================================================================
 # POST /api/repository/upload

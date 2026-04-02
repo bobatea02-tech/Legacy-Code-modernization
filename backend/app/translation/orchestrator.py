@@ -191,6 +191,11 @@ class TranslationOrchestrator:
                 force_json=False,
             )
         except Exception as e:
+            from app.llm.exceptions import QuotaExhaustedError
+            if isinstance(e, QuotaExhaustedError):
+                # Re-raise so the whole pipeline stops — no point continuing
+                logger.error(f"Quota exhausted during translation of {node.name}: {e}")
+                raise
             logger.error(f"LLM call failed for {node.name}: {e}")
             return TranslationResult(
                 module_name=node_id,

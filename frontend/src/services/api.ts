@@ -276,6 +276,26 @@ class ApiClient {
     return response.blob();
   }
 
+  /** Get Gemini API quota / usage status */
+  async getLlmStatus(): Promise<{
+    quota_exhausted: boolean;
+    total_tokens_used: number;
+    daily_token_limit: number;
+    usage_percent: number;
+    total_requests: number;
+    failed_requests: number;
+    last_error: string | null;
+    last_request_at: string | null;
+    reset_at: string | null;
+  }> {
+    return this.request("/llm/status");
+  }
+
+  /** Reset quota counter after updating API key */
+  async resetLlmQuota(): Promise<{ message: string }> {
+    return this.request("/llm/reset-quota", { method: "POST" });
+  }
+
   /** Get full inspect data (translated files + validation) for a completed run */
   async getInspectData(runId: string): Promise<{
     file_tree: { name: string; path: string; depth: number; type: "file" | "directory" }[];

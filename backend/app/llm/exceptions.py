@@ -26,6 +26,11 @@ class RateLimitError(LLMError):
     pass
 
 
+class QuotaExhaustedError(LLMError):
+    """Raised when the Gemini API quota/daily limit is fully exhausted."""
+    pass
+
+
 class StructuredLLMError(LLMError):
     """Raised when LLM response doesn't match expected schema."""
     pass

@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
+import { KeyRound, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
+import { useApiKeyStatus } from "@/hooks/useApiKeyStatus";
 
 const navItems = [
   { to: "/", label: "HOME" },
@@ -12,6 +15,7 @@ const navItems = [
 
 const Navbar = () => {
   const backendStatus = useBackendStatus();
+  const { status: apiKey, resetQuota } = useApiKeyStatus();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 h-[72px] flex items-center justify-between px-6 hairline-b bg-background/80 backdrop-blur-md">
@@ -45,19 +49,21 @@ const Navbar = () => {
         ))}
       </div>
 
-      {/* Right — backend connection indicator */}
-      <BackendIndicator status={backendStatus} />
+      {/* Right — indicators */}
+      <div className="flex items-center gap-2">
+        {/* Only show API key indicator when backend is reachable */}
+        {backendStatus === "connected" && (
+          <ApiKeyIndicator status={apiKey} onReset={resetQuota} />
+        )}
+        <BackendIndicator status={backendStatus} />
+      </div>
     </nav>
   );
 };
 
-// ── Indicator component ──────────────────────────────────────────────────────
+// ── Backend connection indicator ─────────────────────────────────────────────
 
-interface BackendIndicatorProps {
-  status: "connected" | "disconnected" | "checking";
-}
-
-const BackendIndicator = ({ status }: BackendIndicatorProps) => {
+const BackendIndicator = ({ status }: { status: "connected" | "disconnected" | "checking" }) => {
   const isConnected    = status === "connected";
   const isChecking     = status === "checking";
   const isDisconnected = status === "disconnected";
@@ -76,37 +82,162 @@ const BackendIndicator = ({ status }: BackendIndicatorProps) => {
         "Checking backend…"
       }
     >
-      {/* Animated dot */}
       <span className="relative flex h-2 w-2">
-        {/* Ping ring — only when connected */}
         {isConnected && (
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
         )}
-        <span
-          className={cn(
-            "relative inline-flex rounded-full h-2 w-2",
-            isConnected    && "bg-emerald-400",
-            isDisconnected && "bg-red-400",
-            isChecking     && "bg-muted-foreground animate-pulse",
-          )}
-        />
+        <span className={cn(
+          "relative inline-flex rounded-full h-2 w-2",
+          isConnected    && "bg-emerald-400",
+          isDisconnected && "bg-red-400",
+          isChecking     && "bg-muted-foreground animate-pulse",
+        )} />
       </span>
-
-      {/* Label */}
-      <span
-        className={cn(
-          "mono-label-sm leading-none",
-          isConnected    && "text-emerald-400",
-          isDisconnected && "text-red-400",
-          isChecking     && "text-muted-foreground",
-        )}
-      >
-        {isConnected    ? "CONNECTED" :
-         isDisconnected ? "DISCONNECTED" :
-         "CHECKING…"}
+      <span className={cn(
+        "mono-label-sm leading-none",
+        isConnected    && "text-emerald-400",
+        isDisconnected && "text-red-400",
+        isChecking     && "text-muted-foreground",
+      )}>
+        {isConnected ? "CONNECTED" : isDisconnected ? "DISCONNECTED" : "CHECKING…"}
       </span>
     </div>
   );
 };
+
+// ── API key / quota indicator ─────────────────────────────────────────────────
+
+interface ApiKeyIndicatorProps {
+  status: ReturnType<typeof useApiKeyStatus>["status"];
+  onReset: () => void;
+}
+
+const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  const { quota_exhausted, usage_percent, total_tokens_used, daily_token_limit, total_requests } = status;
+
+  // Colour thresholds
+  const barColor =
+    quota_exhausted || usage_percent >= 100 ? "bg-red-500" :
+    usage_percent >= 80                     ? "bg-yellow-400" :
+    usage_percent >= 50                     ? "bg-orange-400" :
+    "bg-emerald-400";
+
+  const labelColor =
+    quota_exhausted || usage_percent >= 100 ? "text-red-400" :
+    usage_percent >= 80                     ? "text-yellow-400" :
+    "text-foreground/60";
+
+  const borderColor =
+    quota_exhausted || usage_percent >= 100 ? "border-red-500/40 bg-red-500/10" :
+    usage_percent >= 80                     ? "border-yellow-400/40 bg-yellow-400/10" :
+    "border-muted/30 bg-muted/5";
+
+  return (
+    <div className="relative">
+      <button
+        className={cn(
+          "flex items-center gap-2 px-3 py-1.5 rounded border transition-all duration-300",
+          borderColor,
+        )}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        onClick={() => setShowTooltip(v => !v)}
+        title="Gemini API key usage"
+      >
+        <KeyRound size={11} className={labelColor} />
+
+        {quota_exhausted ? (
+          <span className="mono-label-sm text-red-400 animate-pulse">NEW_API_KEY_NEEDED</span>
+        ) : (
+          <>
+            {/* Usage bar */}
+            <div className="w-16 h-1.5 bg-muted/40 rounded-full overflow-hidden">
+              <div
+                className={cn("h-full rounded-full transition-all duration-700", barColor)}
+                style={{ width: `${Math.min(usage_percent, 100)}%` }}
+              />
+            </div>
+            <span className={cn("mono-label-sm tabular-nums", labelColor)}>
+              {usage_percent.toFixed(0)}%
+            </span>
+          </>
+        )}
+      </button>
+
+      {/* Tooltip / dropdown */}
+      {showTooltip && (
+        <div className="absolute right-0 top-full mt-2 w-72 z-50 rounded border border-muted/30 bg-background/95 backdrop-blur-md shadow-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="mono-label-sm text-foreground/60">GEMINI_API_USAGE</span>
+            <KeyRound size={12} className={labelColor} />
+          </div>
+
+          {/* Big usage bar */}
+          <div className="w-full h-2 bg-muted/30 rounded-full overflow-hidden mb-1">
+            <div
+              className={cn("h-full rounded-full transition-all duration-700", barColor)}
+              style={{ width: `${Math.min(usage_percent, 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between mb-4">
+            <span className="font-mono text-xs text-foreground/40">
+              {total_tokens_used.toLocaleString()} tokens used
+            </span>
+            <span className="font-mono text-xs text-foreground/40">
+              {daily_token_limit.toLocaleString()} limit
+            </span>
+          </div>
+
+          {/* Stats */}
+          <div className="space-y-1.5 mb-4">
+            <Row label="USAGE" value={`${usage_percent.toFixed(1)}%`} highlight={usage_percent >= 80} />
+            <Row label="REQUESTS" value={total_requests.toString()} />
+            {status.failed_requests > 0 && (
+              <Row label="FAILED" value={status.failed_requests.toString()} danger />
+            )}
+          </div>
+
+          {/* Exhausted banner */}
+          {quota_exhausted && (
+            <div className="mb-3 p-2 rounded bg-red-500/10 border border-red-500/30">
+              <p className="mono-label-sm text-red-400 mb-1">NEW API KEY NEEDED</p>
+              <p className="font-mono text-xs text-red-400/70">
+                Daily quota exhausted. Update LLM_API_KEY in backend/.env then click Reset.
+              </p>
+              {status.last_error && (
+                <p className="font-mono text-xs text-foreground/30 mt-1 break-all">
+                  {status.last_error.slice(0, 120)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Reset button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onReset(); }}
+            className="w-full flex items-center justify-center gap-2 py-1.5 mono-label-sm text-muted-foreground hover:text-foreground border border-muted/30 hover:border-foreground/30 rounded transition-colors duration-200"
+          >
+            <RotateCcw size={10} />
+            RESET_COUNTER
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Row = ({ label, value, highlight, danger }: { label: string; value: string; highlight?: boolean; danger?: boolean }) => (
+  <div className="flex justify-between">
+    <span className="mono-label-sm text-foreground/30">{label}</span>
+    <span className={cn(
+      "font-mono text-xs",
+      danger     && "text-red-400",
+      highlight  && !danger && "text-yellow-400",
+      !danger && !highlight && "text-foreground/60",
+    )}>{value}</span>
+  </div>
+);
 
 export default Navbar;
