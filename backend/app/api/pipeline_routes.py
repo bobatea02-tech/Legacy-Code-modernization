@@ -673,23 +673,84 @@ async def generate_output_package(run_id: str, result) -> str:
 
     import re as _re
 
-    for trans_result in result.translation_results:
-        if not trans_result.translated_code:
-            continue
+    # Build inspect data while writing files
+    inspect_files = []   # list of {original_path, translated_path, original_code, translated_code, status, errors}
+    file_tree = []       # list of {name, path, depth, type}
 
-        # Derive output filename from source_file if available, else from module_name node ID
+    for trans_result in result.translation_results:
         source_path = getattr(trans_result, "source_file", "") or trans_result.module_name.split(":")[0]
         stem = Path(source_path).stem if source_path else "module"
         safe_name = _re.sub(r'[^\w]', '_', stem).strip("_") or "module"
 
-        file_path = src_dir / f"{safe_name}.py"
-        # Handle name collisions
-        counter = 1
-        while file_path.exists():
-            file_path = src_dir / f"{safe_name}_{counter}.py"
-            counter += 1
-        file_path.write_text(trans_result.translated_code, encoding="utf-8")
-        logger.info(f"Wrote translated file: {file_path.name}")
+        if trans_result.translated_code:
+            file_path = src_dir / f"{safe_name}.py"
+            counter = 1
+            while file_path.exists():
+                file_path = src_dir / f"{safe_name}_{counter}.py"
+                counter += 1
+            file_path.write_text(trans_result.translated_code, encoding="utf-8")
+            logger.info(f"Wrote translated file: {file_path.name}")
+
+            inspect_files.append({
+                "original_path": source_path or trans_result.module_name,
+                "translated_path": f"src/{file_path.name}",
+                "original_code": _read_source_file(source_path),
+                "translated_code": trans_result.translated_code,
+                "status": trans_result.status.value,
+                "errors": trans_result.errors,
+                "warnings": trans_result.warnings,
+                "token_usage": trans_result.token_usage,
+            })
+            file_tree.append({
+                "name": file_path.name,
+                "path": f"src/{file_path.name}",
+                "depth": 1,
+                "type": "file",
+            })
+        else:
+            inspect_files.append({
+                "original_path": source_path or trans_result.module_name,
+                "translated_path": "",
+                "original_code": _read_source_file(source_path),
+                "translated_code": "",
+                "status": trans_result.status.value,
+                "errors": trans_result.errors,
+                "warnings": trans_result.warnings,
+                "token_usage": 0,
+            })
+
+    # Add src/ directory entry at top of tree
+    if file_tree:
+        file_tree.insert(0, {"name": "src/", "path": "src/", "depth": 0, "type": "directory"})
+
+    # Store inspect data in pipeline_runs for the /inspect endpoint
+    if run_id in pipeline_runs:
+        pipeline_runs[run_id]["inspect"] = {
+            "file_tree": file_tree,
+            "translated_files": inspect_files,
+            "validation_reports": [
+                {
+                    "module": v.module_name,
+                    "syntax_valid": v.syntax_valid,
+                    "structure_valid": v.structure_valid,
+                    "symbols_preserved": v.symbols_preserved,
+                    "dependencies_complete": v.dependencies_complete,
+                    "errors": v.errors,
+                }
+                for v in result.validation_reports
+            ],
+            "failures": [
+                {
+                    "node_id": r.module_name,
+                    "file": getattr(r, "source_file", r.module_name.split(":")[0]),
+                    "category": "TRANSLATION_FAILED",
+                    "error_summary": "; ".join(r.errors) if r.errors else "Unknown error",
+                    "slice_size": 0,
+                }
+                for r in result.translation_results
+                if r.status.value != "success"
+            ],
+        }
 
     # If no translations produced, write a placeholder so the ZIP isn't empty
     if not list(src_dir.rglob("*.py")):
@@ -772,6 +833,16 @@ async def generate_output_package(run_id: str, result) -> str:
     _zip_dir(det_dir, output_dir / "determinism_proof.zip")
 
     return str(output_dir / "modernized_repo.zip")
+
+
+def _read_source_file(path: str) -> str:
+    """Safely read original source file content for inspect view."""
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
 
 
 def _zip_dir(source_dir: Path, zip_path: Path):
@@ -970,6 +1041,37 @@ async def download_artifact(run_id: str, artifact: str):
     path = _get_artifact_path(run_id, artifact)
     return FileResponse(path=str(path), media_type="application/zip",
                         filename=f"{artifact}_{run_id}.zip")
+
+# ============================================================================
+# GET /api/results/inspect/{run_id}
+# ============================================================================
+
+@router.get("/results/inspect/{run_id}", summary="Get full inspect data for translated files")
+async def get_inspect_data(run_id: str):
+    """
+    Returns the full inspection payload:
+    - file_tree: list of translated file entries
+    - translated_files: original + translated code for each file
+    - validation_reports: per-module validation results
+    - failures: list of failed translations
+    """
+    if run_id not in pipeline_runs:
+        raise HTTPException(status_code=404, detail=f"Pipeline run not found: {run_id}")
+
+    run = pipeline_runs[run_id]
+
+    if run["status"] not in ("COMPLETED",):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pipeline not completed. Status: {run['status']}"
+        )
+
+    inspect = run.get("inspect")
+    if not inspect:
+        raise HTTPException(status_code=404, detail="Inspect data not available for this run")
+
+    return inspect
+
 
 # ============================================================================
 # WebSocket broadcast helper

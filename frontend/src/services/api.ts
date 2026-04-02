@@ -175,16 +175,7 @@ class ApiClient {
 
   /** Get download URL for an artifact */
   getDownloadUrl(runId: string, artifact: string): string {
-    // NOTE: This endpoint is not implemented in backend
-    // Use getModernizedRepoDownloadUrl() instead
-    throw new Error("Use getModernizedRepoDownloadUrl() instead");
-  }
-
-  /** Download artifact as blob */
-  async downloadArtifact(runId: string, artifact: string): Promise<Blob> {
-    // NOTE: This endpoint is not implemented in backend
-    // Use downloadModernizedRepo() instead
-    throw new Error("Use downloadModernizedRepo() instead");
+    return `${this.baseUrl}/results/download/${runId}/${artifact}`;
   }
 
   /** Health check */
@@ -283,6 +274,38 @@ class ApiClient {
     const response = await fetch(url);
     if (!response.ok) throw new ApiError(response.status, "Download failed");
     return response.blob();
+  }
+
+  /** Get full inspect data (translated files + validation) for a completed run */
+  async getInspectData(runId: string): Promise<{
+    file_tree: { name: string; path: string; depth: number; type: "file" | "directory" }[];
+    translated_files: {
+      original_path: string;
+      translated_path: string;
+      original_code: string;
+      translated_code: string;
+      status: string;
+      errors: string[];
+      warnings: string[];
+      token_usage: number;
+    }[];
+    validation_reports: {
+      module: string;
+      syntax_valid: boolean;
+      structure_valid: boolean;
+      symbols_preserved: boolean;
+      dependencies_complete: boolean;
+      errors: string[];
+    }[];
+    failures: {
+      node_id: string;
+      file: string;
+      category: string;
+      error_summary: string;
+      slice_size: number;
+    }[];
+  }> {
+    return this.request(`/results/inspect/${runId}`);
   }
 
   /** Download a specific artifact ZIP by key */
