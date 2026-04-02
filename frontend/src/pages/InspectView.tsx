@@ -125,7 +125,7 @@ const InspectView = () => {
               >
                 {tab}
                 {tab === "FAILURE_ANALYSIS" && failures.length > 0 && (
-                  <span className="ml-2 text-red-400">({failures.length})</span>
+                  <span className="ml-2 text-red-400">[{failures.length}]</span>
                 )}
               </button>
             ))}
