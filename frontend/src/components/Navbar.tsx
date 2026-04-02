@@ -79,7 +79,7 @@ const BackendIndicator = ({ status }: { status: "connected" | "disconnected" | "
       title={
         isConnected    ? "Backend connected" :
         isDisconnected ? "Backend unreachable" :
-        "Checking backend…"
+        "Checking backend..."
       }
     >
       <span className="relative flex h-2 w-2">
@@ -99,7 +99,7 @@ const BackendIndicator = ({ status }: { status: "connected" | "disconnected" | "
         isDisconnected && "text-red-400",
         isChecking     && "text-muted-foreground",
       )}>
-        {isConnected ? "CONNECTED" : isDisconnected ? "DISCONNECTED" : "CHECKING…"}
+        {isConnected ? "CONNECTED" : isDisconnected ? "DISCONNECTED" : "CHECKING..."}
       </span>
     </div>
   );
