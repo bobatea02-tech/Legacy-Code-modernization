@@ -686,66 +686,165 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str, so
 
 async def generate_output_package(run_id: str, result) -> str:
     """Generate all artifact packages and return path to the main modernized_repo ZIP."""
+    import re as _re
+    from datetime import timezone
+
     output_dir = Path(tempfile.gettempdir()) / "modernize_outputs" / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # ── 1. modernized_repo: translated Python source files ──────────
-    src_dir = output_dir / "modernized_repo" / "src"
+    repo_dir = output_dir / "modernized_repo"
+    src_dir  = repo_dir / "src"
     src_dir.mkdir(parents=True, exist_ok=True)
 
-    import re as _re
-
-    # Build inspect data while writing files
-    inspect_files = []   # list of {original_path, translated_path, original_code, translated_code, status, errors}
-    file_tree = []       # list of {name, path, depth, type}
+    # ── Track filename mappings for migration guide ──────────────────
+    # mapping: original_relative_path -> output_relative_path
+    file_mappings: list = []   # list of dicts
+    inspect_files: list = []
+    file_tree: list = []
+    used_names: dict = {}      # stem -> count, for collision avoidance
 
     for trans_result in result.translation_results:
+        # ── Derive output filename ───────────────────────────────────
         source_path = getattr(trans_result, "source_file", "") or trans_result.module_name.split(":")[0]
-        stem = Path(source_path).stem if source_path else "module"
-        safe_name = _re.sub(r'[^\w]', '_', stem).strip("_") or "module"
+        output_stem = getattr(trans_result, "output_filename", "") or ""
+
+        if not output_stem:
+            raw_stem = Path(source_path).stem if source_path else trans_result.module_name
+            output_stem = _re.sub(r'[^\w]', '_', raw_stem.lower()).strip('_') or "module"
+            if output_stem[0].isdigit():
+                output_stem = "mod_" + output_stem
+
+        # Collision avoidance
+        if output_stem in used_names:
+            used_names[output_stem] += 1
+            final_stem = f"{output_stem}_{used_names[output_stem]}"
+        else:
+            used_names[output_stem] = 0
+            final_stem = output_stem
+
+        py_filename = f"{final_stem}.py"
+        out_path    = src_dir / py_filename
+        rel_out     = f"src/{py_filename}"
+
+        # ── Compute original relative path ───────────────────────────
+        # source_path is an absolute temp path; extract the meaningful part
+        # by stripping everything up to the first non-temp segment
+        orig_rel = _make_relative_path(source_path)
 
         if trans_result.translated_code:
-            file_path = src_dir / f"{safe_name}.py"
-            counter = 1
-            while file_path.exists():
-                file_path = src_dir / f"{safe_name}_{counter}.py"
-                counter += 1
-            file_path.write_text(trans_result.translated_code, encoding="utf-8")
-            logger.info(f"Wrote translated file: {file_path.name}")
+            out_path.write_text(trans_result.translated_code, encoding="utf-8")
+            logger.info(f"Wrote: {py_filename}  (from {orig_rel})")
 
-            inspect_files.append({
-                "original_path": source_path or trans_result.module_name,
-                "translated_path": f"src/{file_path.name}",
-                "original_code": _read_source_file(source_path),
-                "translated_code": trans_result.translated_code,
+            file_mappings.append({
+                "original": orig_rel,
+                "translated": rel_out,
                 "status": trans_result.status.value,
-                "errors": trans_result.errors,
-                "warnings": trans_result.warnings,
-                "token_usage": trans_result.token_usage,
+                "program_name": trans_result.module_name.split(":")[1] if ":" in trans_result.module_name else final_stem,
+                "tokens": trans_result.token_usage,
             })
-            file_tree.append({
-                "name": file_path.name,
-                "path": f"src/{file_path.name}",
-                "depth": 1,
-                "type": "file",
-            })
+            file_tree.append({"name": py_filename, "path": rel_out, "depth": 1, "type": "file"})
         else:
-            inspect_files.append({
-                "original_path": source_path or trans_result.module_name,
-                "translated_path": "",
-                "original_code": _read_source_file(source_path),
-                "translated_code": "",
+            file_mappings.append({
+                "original": orig_rel,
+                "translated": None,
                 "status": trans_result.status.value,
+                "program_name": trans_result.module_name.split(":")[1] if ":" in trans_result.module_name else final_stem,
+                "tokens": 0,
                 "errors": trans_result.errors,
-                "warnings": trans_result.warnings,
-                "token_usage": 0,
             })
 
-    # Add src/ directory entry at top of tree
+        inspect_files.append({
+            "original_path": orig_rel,
+            "translated_path": rel_out if trans_result.translated_code else "",
+            "original_code": _read_source_file(source_path),
+            "translated_code": trans_result.translated_code,
+            "status": trans_result.status.value,
+            "errors": trans_result.errors,
+            "warnings": trans_result.warnings,
+            "token_usage": trans_result.token_usage,
+        })
+
+    # ── Write __init__.py ────────────────────────────────────────────
+    (src_dir / "__init__.py").write_text(
+        "# Auto-generated by MODERNIZE NOW\n# Translated Python modules\n",
+        encoding="utf-8",
+    )
+
+    # ── Write requirements.txt ───────────────────────────────────────
+    (repo_dir / "requirements.txt").write_text(
+        "# Python dependencies for modernized code\n# Add any third-party packages here\n",
+        encoding="utf-8",
+    )
+
+    # ── Write MIGRATION_GUIDE.md ─────────────────────────────────────
+    guide_lines = [
+        "# Migration Guide",
+        "",
+        f"Generated by **MODERNIZE NOW** on {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+        f"Run ID: `{run_id}`",
+        "",
+        "## Overview",
+        "",
+        f"- **Total files translated:** {sum(1 for m in file_mappings if m['status'] == 'success')} / {len(file_mappings)}",
+        f"- **Failed translations:** {sum(1 for m in file_mappings if m['status'] == 'failed')}",
+        "",
+        "## File Mapping",
+        "",
+        "| Original File | Translated File | Program Name | Status | Tokens |",
+        "|---|---|---|---|---|",
+    ]
+
+    for m in file_mappings:
+        status_icon = "✅" if m["status"] == "success" else ("⏭️" if m["status"] == "skipped" else "❌")
+        translated  = m["translated"] or "*(not translated)*"
+        tokens      = str(m.get("tokens", 0))
+        guide_lines.append(
+            f"| `{m['original']}` | `{translated}` | `{m['program_name']}` | {status_icon} {m['status']} | {tokens} |"
+        )
+
+    guide_lines += [
+        "",
+        "## How to Use the Translated Code",
+        "",
+        "1. All translated Python files are in the `src/` directory.",
+        "2. Each file corresponds to one source program/class from the original repository.",
+        "3. Import modules using standard Python imports, e.g.:",
+        "   ```python",
+        "   from src.myprog import main",
+        "   ```",
+        "4. Review any `# TODO` comments — these mark places where the LLM could not",
+        "   fully resolve a dependency or business rule.",
+        "5. Run `python -m py_compile src/<filename>.py` to verify syntax.",
+        "",
+        "## Failed Translations",
+        "",
+    ]
+
+    failed = [m for m in file_mappings if m["status"] == "failed"]
+    if failed:
+        for m in failed:
+            errs = "; ".join(m.get("errors", [])) or "Unknown error"
+            guide_lines.append(f"- **`{m['original']}`**: {errs}")
+    else:
+        guide_lines.append("*All files translated successfully.*")
+
+    guide_lines.append("")
+    (repo_dir / "MIGRATION_GUIDE.md").write_text("\n".join(guide_lines), encoding="utf-8")
+
+    # ── Placeholder if no .py files produced ────────────────────────
+    if not list(src_dir.rglob("*.py")):
+        (src_dir / "no_output.txt").write_text(
+            "No translated files were produced. Check backend logs for LLM errors.\n",
+            encoding="utf-8",
+        )
+
+    # ── ZIP the modernized_repo ──────────────────────────────────────
+    _zip_dir(repo_dir, output_dir / "modernized_repo.zip")
+
+    # ── Store inspect data ───────────────────────────────────────────
     if file_tree:
         file_tree.insert(0, {"name": "src/", "path": "src/", "depth": 0, "type": "directory"})
 
-    # Store inspect data in pipeline_runs for the /inspect endpoint
     if run_id in pipeline_runs:
         pipeline_runs[run_id]["inspect"] = {
             "file_tree": file_tree,
@@ -773,15 +872,6 @@ async def generate_output_package(run_id: str, result) -> str:
                 if r.status.value != "success"
             ],
         }
-
-    # If no translations produced, write a placeholder so the ZIP isn't empty
-    if not list(src_dir.rglob("*.py")):
-        (src_dir / "README.txt").write_text(
-            "No translated files were produced. Check backend logs for LLM errors.\n",
-            encoding="utf-8",
-        )
-
-    _zip_dir(output_dir / "modernized_repo", output_dir / "modernized_repo.zip")
 
     # ── 2. validation_report ─────────────────────────────────────────
     val_dir = output_dir / "validation_report"
@@ -820,8 +910,9 @@ async def generate_output_package(run_id: str, result) -> str:
     # ── 4. failure_analysis ──────────────────────────────────────────
     fail_dir = output_dir / "failure_analysis"
     fail_dir.mkdir(exist_ok=True)
-    failures = [
+    failures_data = [
         {
+            "original_file": _make_relative_path(getattr(r, "source_file", "")),
             "module": r.module_name,
             "status": r.status.value,
             "errors": r.errors,
@@ -831,7 +922,7 @@ async def generate_output_package(run_id: str, result) -> str:
         if r.status.value != "success"
     ]
     (fail_dir / "failure_analysis.json").write_text(
-        json.dumps({"failures": failures, "total": len(failures)}, indent=2),
+        json.dumps({"failures": failures_data, "total": len(failures_data)}, indent=2),
         encoding="utf-8",
     )
     _zip_dir(fail_dir, output_dir / "failure_analysis.zip")
@@ -855,6 +946,32 @@ async def generate_output_package(run_id: str, result) -> str:
     _zip_dir(det_dir, output_dir / "determinism_proof.zip")
 
     return str(output_dir / "modernized_repo.zip")
+
+
+def _make_relative_path(abs_path: str) -> str:
+    """Extract a meaningful relative path from an absolute temp path.
+
+    Strips the temp extraction prefix (everything up to and including
+    the first 'repo_ingest_*' or 'git_clone_*' segment) so the result
+    looks like  'src/MYPROG.cbl'  instead of
+    'C:/Users/.../repo_ingest_xyz/repo/src/MYPROG.cbl'.
+    """
+    if not abs_path:
+        return ""
+    p = Path(abs_path)
+    parts = p.parts
+    # Find the first segment that looks like a temp prefix
+    skip_prefixes = ("repo_ingest_", "git_clone_", "modernize_uploads", "temp_repos")
+    cut = 0
+    for i, part in enumerate(parts):
+        if any(part.startswith(pfx) for pfx in skip_prefixes):
+            cut = i + 1
+            break
+    # Also skip a bare 'repo' segment right after the temp dir
+    if cut < len(parts) and parts[cut] in ("repo", "src"):
+        pass  # keep it — it's part of the meaningful path
+    rel_parts = parts[cut:] if cut else parts
+    return "/".join(rel_parts) if rel_parts else p.name
 
 
 def _read_source_file(path: str) -> str:
