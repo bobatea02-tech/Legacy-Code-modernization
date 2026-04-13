@@ -111,15 +111,22 @@ class LLMService:
             "Executing LLM request with retry",
             extra={"cache_key": cache_key[:8]}
         )
-        
-        response = self.retry_policy.execute(
-            self.llm_client.generate,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            force_json=force_json
-        )
+
+        try:
+            response = self.retry_policy.execute(
+                self.llm_client.generate,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                force_json=force_json
+            )
+        except Exception as e:
+            # Let QuotaExhaustedError and APIKeyMissingError propagate unchanged
+            from app.llm.exceptions import QuotaExhaustedError, APIKeyMissingError
+            if isinstance(e, (QuotaExhaustedError, APIKeyMissingError)):
+                raise
+            raise
         
         # Cache response
         self.cache_service.set(cache_key, {
