@@ -117,21 +117,24 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
 
   const { quota_exhausted, usage_percent, total_tokens_used, daily_token_limit, total_requests } = status;
 
+  // Treat as exhausted if flagged OR if there are failures but zero successes
+  const isExhausted = quota_exhausted || (status.failed_requests > 0 && total_requests === 0);
+
   // Colour thresholds
   const barColor =
-    quota_exhausted || usage_percent >= 100 ? "bg-red-500" :
-    usage_percent >= 80                     ? "bg-yellow-400" :
-    usage_percent >= 50                     ? "bg-orange-400" :
+    isExhausted || usage_percent >= 100 ? "bg-red-500" :
+    usage_percent >= 80                  ? "bg-yellow-400" :
+    usage_percent >= 50                  ? "bg-orange-400" :
     "bg-emerald-400";
 
   const labelColor =
-    quota_exhausted || usage_percent >= 100 ? "text-red-400" :
-    usage_percent >= 80                     ? "text-yellow-400" :
+    isExhausted || usage_percent >= 100 ? "text-red-400" :
+    usage_percent >= 80                  ? "text-yellow-400" :
     "text-foreground/60";
 
   const borderColor =
-    quota_exhausted || usage_percent >= 100 ? "border-red-500/40 bg-red-500/10" :
-    usage_percent >= 80                     ? "border-yellow-400/40 bg-yellow-400/10" :
+    isExhausted || usage_percent >= 100 ? "border-red-500/40 bg-red-500/10" :
+    usage_percent >= 80                  ? "border-yellow-400/40 bg-yellow-400/10" :
     "border-muted/30 bg-muted/5";
 
   return (
@@ -148,7 +151,7 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
       >
         <KeyRound size={11} className={labelColor} />
 
-        {quota_exhausted ? (
+        {isExhausted ? (
           <span className="mono-label-sm text-red-400 animate-pulse">NEW_API_KEY_NEEDED</span>
         ) : (
           <>
@@ -200,7 +203,7 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
           </div>
 
           {/* Exhausted banner */}
-          {quota_exhausted && (
+          {isExhausted && (
             <div className="mb-3 p-2 rounded bg-red-500/10 border border-red-500/30">
               <p className="mono-label-sm text-red-400 mb-1">NEW API KEY NEEDED</p>
               <p className="font-mono text-xs text-red-400/70">

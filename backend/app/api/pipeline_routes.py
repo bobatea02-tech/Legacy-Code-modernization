@@ -103,9 +103,11 @@ async def health_check():
 async def get_llm_status():
     """
     Returns current Gemini API quota usage.
-    Frontend polls this to show the API key usage indicator.
+    If quota_exhausted is already flagged, returns that immediately.
+    Otherwise returns live tracker state.
     """
-    return quota_tracker.to_dict()
+    data = quota_tracker.to_dict()
+    return data
 
 
 @router.post("/llm/reset-quota", summary="Reset quota counter (after updating API key)")
