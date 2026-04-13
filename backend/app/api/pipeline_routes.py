@@ -110,11 +110,54 @@ async def get_llm_status():
     return data
 
 
-@router.post("/llm/reset-quota", summary="Reset quota counter (after updating API key)")
+@router.post("/llm/reset-quota", summary="Reset quota counter and reload API key from .env")
 async def reset_llm_quota():
-    """Reset the quota tracker — call this after updating the API key in .env."""
+    """
+    Reset the quota tracker AND reload LLM_API_KEY from .env.
+    Call this after updating the API key in backend/.env.
+    The new key is validated immediately — if it's invalid the indicator
+    will show exhausted again right away.
+    """
+    from app.core.config import reload_settings
+    from app.llm.factory import get_llm_client
+
+    # 1. Reset the quota tracker
     quota_tracker.reset()
-    return {"message": "Quota counter reset", "status": quota_tracker.to_dict()}
+
+    # 2. Reload settings from .env so the new key is picked up
+    try:
+        new_settings = reload_settings()
+        new_key_preview = new_settings.LLM_API_KEY[:8] + "..."
+        logger.info(f"Settings reloaded, new key prefix: {new_key_preview}")
+    except Exception as e:
+        logger.error(f"Failed to reload settings: {e}")
+        return {"message": f"Quota reset but settings reload failed: {e}", "status": quota_tracker.to_dict()}
+
+    # 3. Validate the new key with a minimal probe call
+    key_valid = False
+    key_error = None
+    try:
+        client = get_llm_client()
+        from google import genai
+        from google.genai import types
+        probe = client.client.models.generate_content(
+            model=client.model_name,
+            contents="Hi",
+            config=types.GenerateContentConfig(max_output_tokens=1, temperature=0.0),
+        )
+        key_valid = True
+        logger.info("New API key validated successfully")
+    except Exception as e:
+        key_error = str(e)
+        logger.warning(f"New API key validation failed: {e}")
+        # quota_tracker already updated by gemini_client's exception handler
+
+    return {
+        "message": "Quota reset and key reloaded",
+        "key_valid": key_valid,
+        "key_error": key_error,
+        "status": quota_tracker.to_dict(),
+    }
 
 
 # ============================================================================

@@ -114,13 +114,12 @@ interface ApiKeyIndicatorProps {
 
 const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
   const [showTooltip, setShowTooltip] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const { quota_exhausted, usage_percent, total_tokens_used, daily_token_limit, total_requests } = status;
 
-  // Treat as exhausted if flagged OR if there are failures but zero successes
   const isExhausted = quota_exhausted || (status.failed_requests > 0 && total_requests === 0);
 
-  // Colour thresholds
   const barColor =
     isExhausted || usage_percent >= 100 ? "bg-red-500" :
     usage_percent >= 80                  ? "bg-yellow-400" :
@@ -136,6 +135,12 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
     isExhausted || usage_percent >= 100 ? "border-red-500/40 bg-red-500/10" :
     usage_percent >= 80                  ? "border-yellow-400/40 bg-yellow-400/10" :
     "border-muted/30 bg-muted/5";
+
+  const handleReset = async () => {
+    setResetting(true);
+    await onReset();
+    setResetting(false);
+  };
 
   return (
     <div className="relative">
@@ -155,7 +160,6 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
           <span className="mono-label-sm text-red-400 animate-pulse">NEW_API_KEY_NEEDED</span>
         ) : (
           <>
-            {/* Usage bar */}
             <div className="w-16 h-1.5 bg-muted/40 rounded-full overflow-hidden">
               <div
                 className={cn("h-full rounded-full transition-all duration-700", barColor)}
@@ -169,15 +173,13 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
         )}
       </button>
 
-      {/* Tooltip / dropdown */}
       {showTooltip && (
-        <div className="absolute right-0 top-full mt-2 w-72 z-50 rounded border border-muted/30 bg-background/95 backdrop-blur-md shadow-xl p-4">
+        <div className="absolute right-0 top-full mt-2 w-80 z-50 rounded border border-muted/30 bg-background/95 backdrop-blur-md shadow-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="mono-label-sm text-foreground/60">GEMINI_API_USAGE</span>
             <KeyRound size={12} className={labelColor} />
           </div>
 
-          {/* Big usage bar */}
           <div className="w-full h-2 bg-muted/30 rounded-full overflow-hidden mb-1">
             <div
               className={cn("h-full rounded-full transition-all duration-700", barColor)}
@@ -193,7 +195,6 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
             </span>
           </div>
 
-          {/* Stats */}
           <div className="space-y-1.5 mb-4">
             <Row label="USAGE" value={`${usage_percent.toFixed(1)}%`} highlight={usage_percent >= 80} />
             <Row label="REQUESTS" value={total_requests.toString()} />
@@ -202,12 +203,13 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
             )}
           </div>
 
-          {/* Exhausted banner */}
           {isExhausted && (
             <div className="mb-3 p-2 rounded bg-red-500/10 border border-red-500/30">
               <p className="mono-label-sm text-red-400 mb-1">NEW API KEY NEEDED</p>
-              <p className="font-mono text-xs text-red-400/70">
-                Daily quota exhausted. Update LLM_API_KEY in backend/.env then click Reset.
+              <p className="font-mono text-xs text-red-400/70 leading-relaxed">
+                Update <code className="bg-red-500/10 px-1 rounded">LLM_API_KEY</code> in{" "}
+                <code className="bg-red-500/10 px-1 rounded">backend/.env</code>, then click
+                the button below — no restart needed.
               </p>
               {status.last_error && (
                 <p className="font-mono text-xs text-foreground/30 mt-1 break-all">
@@ -217,14 +219,22 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
             </div>
           )}
 
-          {/* Reset button */}
           <button
-            onClick={(e) => { e.stopPropagation(); onReset(); }}
-            className="w-full flex items-center justify-center gap-2 py-1.5 mono-label-sm text-muted-foreground hover:text-foreground border border-muted/30 hover:border-foreground/30 rounded transition-colors duration-200"
+            onClick={(e) => { e.stopPropagation(); handleReset(); }}
+            disabled={resetting}
+            className={cn(
+              "w-full flex items-center justify-center gap-2 py-2 mono-label-sm rounded border transition-colors duration-200",
+              resetting
+                ? "text-muted-foreground border-muted/20 cursor-not-allowed"
+                : "text-foreground/70 hover:text-foreground border-muted/30 hover:border-foreground/40 hover:bg-foreground/5"
+            )}
           >
-            <RotateCcw size={10} />
-            RESET_COUNTER
+            <RotateCcw size={10} className={resetting ? "animate-spin" : ""} />
+            {resetting ? "RELOADING KEY..." : "RELOAD_KEY_&_RESET"}
           </button>
+          <p className="font-mono text-xs text-foreground/20 text-center mt-1">
+            Reads new key from .env instantly
+          </p>
         </div>
       )}
     </div>

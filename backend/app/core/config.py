@@ -120,3 +120,12 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Get cached settings instance (singleton pattern)."""
     return Settings()
+
+
+def reload_settings() -> Settings:
+    """Clear the settings cache and reload from .env file.
+    
+    Call this after the .env file has been updated (e.g. new API key).
+    """
+    get_settings.cache_clear()
+    return get_settings()
