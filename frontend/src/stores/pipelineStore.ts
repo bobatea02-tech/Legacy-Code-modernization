@@ -227,6 +227,7 @@ interface PipelineState {
   pipelineRunning: boolean;
   pipelineComplete: boolean;
   pipelineError: string | null;
+  pipelineQuotaExhausted: boolean;   // true when API key ran out mid-pipeline
   failedPhase: string | null;
   retryable: boolean;
 
@@ -264,6 +265,7 @@ interface PipelineState {
     benchmarks: BenchmarkData;
   }) => void;
   failPipeline: (phase: string, error: string, retryable: boolean) => void;
+  quotaExhaustedPipeline: (phase: string) => void;
 }
 
 // ─── Initial State Factories ───────────────────────────────────────
@@ -308,6 +310,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
   pipelineRunning: false,
   pipelineComplete: false,
   pipelineError: null,
+  pipelineQuotaExhausted: false,
   failedPhase: null,
   retryable: false,
 
@@ -368,6 +371,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       pipelineRunning: true,
       pipelineComplete: false,
       pipelineError: null,
+      pipelineQuotaExhausted: false,
       failedPhase: null,
       retryable: false,
       phases: initialPhases(),
@@ -445,6 +449,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       pipelineRunning: false,
       pipelineComplete: false,
       pipelineError: null,
+      pipelineQuotaExhausted: false,
       failedPhase: null,
       retryable: false,
       metrics: initialMetrics(),
@@ -486,5 +491,15 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       pipelineError: error,
       failedPhase: phase,
       retryable,
+    }),
+
+  quotaExhaustedPipeline: (phase) =>
+    set({
+      pipelineRunning: false,
+      pipelineComplete: false,
+      pipelineQuotaExhausted: true,
+      pipelineError: "API_QUOTA_EXHAUSTED",
+      failedPhase: phase,
+      retryable: false,
     }),
 }));

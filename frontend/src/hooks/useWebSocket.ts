@@ -51,6 +51,9 @@ export function useWebSocket(runId: string | null) {
         case "PIPELINE_ERROR":
           store.failPipeline(msg.phase, msg.error, msg.retryable);
           break;
+        case "QUOTA_EXHAUSTED":
+          store.quotaExhaustedPipeline(msg.phase);
+          break;
       }
     });
 

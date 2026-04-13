@@ -659,27 +659,46 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str, so
         if run_id in pipeline_tasks:
             del pipeline_tasks[run_id]
         raise
-        
+
     except Exception as e:
+        from app.llm.exceptions import QuotaExhaustedError
+
         logger.error(f"Pipeline failed: {run_id}, error: {e}")
-        error_msg = "Pipeline execution failed"
-        if isinstance(e, (ValueError, TypeError)):
+
+        # Detect quota exhaustion specifically
+        is_quota = isinstance(e, QuotaExhaustedError) or quota_tracker.quota_exhausted
+
+        if is_quota:
+            error_msg = "API_QUOTA_EXHAUSTED"
+            error_type = "QUOTA_EXHAUSTED"
+            retryable = False
+        elif isinstance(e, (ValueError, TypeError)):
             error_msg = f"Invalid input: {str(e)}"
+            error_type = "PIPELINE_ERROR"
+            retryable = False
         elif isinstance(e, FileNotFoundError):
             error_msg = "Repository file not found"
+            error_type = "PIPELINE_ERROR"
+            retryable = False
         elif isinstance(e, PermissionError):
             error_msg = "Permission denied accessing repository"
-        elif "LLM" in str(e) or "API" in str(e):
-            error_msg = "LLM service error - please check configuration"
+            error_type = "PIPELINE_ERROR"
+            retryable = False
+        else:
+            error_msg = "Pipeline execution failed"
+            error_type = "PIPELINE_ERROR"
+            retryable = True
+
         pipeline_runs[run_id]["status"] = "FAILED"
         pipeline_runs[run_id]["error"] = error_msg
+        pipeline_runs[run_id]["error_type"] = error_type
         pipeline_runs[run_id]["completed_at"] = datetime.utcnow().isoformat()
         await ws_broadcast(run_id, {
-            "type": "PIPELINE_ERROR",
+            "type": error_type,
             "run_id": run_id,
             "phase": pipeline_runs[run_id].get("phase", "UNKNOWN"),
             "error": error_msg,
-            "retryable": True,
+            "retryable": retryable,
         })
         if run_id in pipeline_tasks:
             del pipeline_tasks[run_id]

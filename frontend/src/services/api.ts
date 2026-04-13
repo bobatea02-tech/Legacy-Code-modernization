@@ -122,13 +122,22 @@ export interface PipelineErrorUpdate {
   retryable: boolean;
 }
 
+export interface QuotaExhaustedUpdate {
+  type: "QUOTA_EXHAUSTED";
+  run_id: string;
+  phase: string;
+  error: string;
+  retryable: false;
+}
+
 export type WebSocketMessage =
   | PipelinePhaseUpdate
   | PipelineMetricsUpdate
   | DeterminismUpdate
   | FailureUpdate
   | PipelineCompleteUpdate
-  | PipelineErrorUpdate;
+  | PipelineErrorUpdate
+  | QuotaExhaustedUpdate;
 
 // ─── REST API Client ───────────────────────────────────────────────
 

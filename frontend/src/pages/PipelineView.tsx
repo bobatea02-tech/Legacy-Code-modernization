@@ -1,6 +1,6 @@
 import { usePipelineStore, PhaseStatus } from "@/stores/pipelineStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { Loader2, RefreshCw, AlertTriangle, XCircle } from "lucide-react";
+import { Loader2, RefreshCw, AlertTriangle, XCircle, KeyRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -25,7 +25,7 @@ const PipelineView = () => {
   const {
     phases, metrics, determinism, failures,
     pipelineRunning, pipelineComplete,
-    pipelineError, failedPhase, retryable,
+    pipelineError, pipelineQuotaExhausted, failedPhase, retryable,
     runId, useBackend, resetPipeline,
   } = usePipelineStore();
 
@@ -34,14 +34,14 @@ const PipelineView = () => {
 
   const navigate = useNavigate();
 
-  // Redirect to results only when pipeline transitions to complete
+  // Redirect to results only when pipeline transitions to complete (not on quota exhaustion)
   const prevCompleteRef = useRef(false);
   useEffect(() => {
-    if (pipelineComplete && !prevCompleteRef.current) {
+    if (pipelineComplete && !prevCompleteRef.current && !pipelineQuotaExhausted) {
       navigate("/results");
     }
     prevCompleteRef.current = pipelineComplete;
-  }, [pipelineComplete, navigate]);
+  }, [pipelineComplete, pipelineQuotaExhausted, navigate]);
 
   // Connect WebSocket when backend is active
   const { connectionStatus } = useWebSocket(useBackend && runId ? runId : null);
@@ -146,8 +146,44 @@ const PipelineView = () => {
         </div>
       </motion.div>
 
-      {/* Error banner */}
-      {pipelineError && (
+      {/* Quota exhausted banner — shown instead of generic error */}
+      {pipelineQuotaExhausted && (
+        <motion.div
+          className="hairline-b px-6 py-6 bg-red-500/5 border-red-500/20"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+        >
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex items-start gap-3">
+              <KeyRound size={18} className="text-red-400 mt-0.5 shrink-0" />
+              <div>
+                <span className="mono-label-sm text-red-400 block mb-1">
+                  PROCESS INCOMPLETE — API QUOTA EXHAUSTED
+                </span>
+                <p className="font-mono text-xs text-red-400/70 leading-relaxed max-w-xl">
+                  The Gemini API key ran out of quota during the translation phase.
+                  The pipeline could not finish. Please update <code className="bg-red-500/10 px-1 rounded">LLM_API_KEY</code> in{" "}
+                  <code className="bg-red-500/10 px-1 rounded">backend/.env</code> with a new key,
+                  restart the backend, then click Reset and run the pipeline again.
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="mono-label-sm text-red-400/50">FAILED AT PHASE:</span>
+                  <span className="mono-label-sm text-red-400">{failedPhase}</span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={resetPipeline}
+              className="mono-label-sm px-4 py-2 hairline border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors duration-300 shrink-0"
+            >
+              RESET
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Generic error banner — only shown for non-quota errors */}
+      {pipelineError && !pipelineQuotaExhausted && (
         <motion.div
           className="hairline-b px-6 py-4 bg-destructive/5"
           initial={{ opacity: 0, height: 0 }}
