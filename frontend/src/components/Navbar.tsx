@@ -143,14 +143,16 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
   };
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
       <button
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 rounded border transition-all duration-300",
           borderColor,
         )}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
         onClick={() => setShowTooltip(v => !v)}
         title="Gemini API key usage"
       >
@@ -220,7 +222,7 @@ const ApiKeyIndicator = ({ status, onReset }: ApiKeyIndicatorProps) => {
           )}
 
           <button
-            onClick={(e) => { e.stopPropagation(); handleReset(); }}
+            onClick={() => handleReset()}
             disabled={resetting}
             className={cn(
               "w-full flex items-center justify-center gap-2 py-2 mono-label-sm rounded border transition-colors duration-200",
