@@ -128,12 +128,20 @@ class LLMService:
                 raise
             raise
         
-        # Cache response
-        self.cache_service.set(cache_key, {
-            "text": response.text,
-            "token_count": response.token_count,
-            "model_name": response.model_name
-        })
+        # Cache response — only if it looks like valid translated code, not an error
+        response_text = response.text or ""
+        is_error_response = (
+            not response_text.strip() or
+            (response_text.strip().startswith("{") and
+             '"error"' in response_text and
+             '"translated_code"' not in response_text)
+        )
+        if not is_error_response:
+            self.cache_service.set(cache_key, {
+                "text": response.text,
+                "token_count": response.token_count,
+                "model_name": response.model_name
+            })
         
         return response
     
