@@ -13,6 +13,23 @@ const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || API_BASE_URL.replace(/^h
 
 // ─── Types matching backend contract ───────────────────────────────
 
+export interface HistoryEntry {
+  run_id: string;
+  repo_id: string;
+  repo_name: string;
+  source_language: string;
+  target_language: string;
+  status: "COMPLETED" | "FAILED" | "CANCELLED" | "RUNNING";
+  phase: string;
+  started_at: string;
+  completed_at: string | null;
+  files_processed: number;
+  success_rate: number;
+  token_reduction: number;
+  has_artifacts: boolean;
+  error: string | null;
+}
+
 export interface StartPipelineRequest {
   repo_url?: string;
   repo_file?: File;
@@ -283,6 +300,24 @@ class ApiClient {
     const response = await fetch(url);
     if (!response.ok) throw new ApiError(response.status, "Download failed");
     return response.blob();
+  }
+
+  /** Get all pipeline run history */
+  async getHistory(): Promise<{
+    runs: HistoryEntry[];
+    total: number;
+  }> {
+    return this.request("/history");
+  }
+
+  /** Get single history entry */
+  async getHistoryEntry(runId: string): Promise<HistoryEntry> {
+    return this.request(`/history/${runId}`);
+  }
+
+  /** Delete a run from history */
+  async deleteHistoryEntry(runId: string): Promise<{ message: string }> {
+    return this.request(`/history/${runId}`, { method: "DELETE" });
   }
 
   /** Get Gemini API quota / usage status */

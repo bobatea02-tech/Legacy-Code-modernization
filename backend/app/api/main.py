@@ -67,7 +67,10 @@ async def health():
 @app.on_event("startup")
 async def startup_event():
     """Application startup event."""
-    logger.info("Legacy Code Modernization Engine starting up")
+    import asyncio
+    from app.core.cleanup import cleanup_loop
+    asyncio.create_task(cleanup_loop())
+    logger.info("Legacy Code Modernization Engine starting up — cleanup task scheduled")
 
 
 @app.on_event("shutdown")

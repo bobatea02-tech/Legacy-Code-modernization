@@ -47,6 +47,9 @@ htmlcov/
 logs/
 *.log
 
+# Persistent data (keep structure, ignore content)
+backend/data/run_history.json
+
 # OS
 .DS_Store
 Thumbs.db

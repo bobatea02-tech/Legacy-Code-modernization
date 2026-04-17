@@ -11,6 +11,7 @@ const navItems = [
   { to: "/pipeline", label: "PIPELINE" },
   { to: "/results", label: "RESULTS" },
   { to: "/inspect", label: "INSPECT" },
+  { to: "/history", label: "HISTORY" },
 ];
 
 const Navbar = () => {

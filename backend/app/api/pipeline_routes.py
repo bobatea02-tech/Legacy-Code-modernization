@@ -10,7 +10,7 @@ Provides endpoints matching the frontend requirements:
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, status, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 import tempfile
 import hashlib
@@ -25,6 +25,7 @@ from app.core.logging import get_logger
 from app.pipeline.service import PipelineService
 from app.core.config import get_settings
 from app.llm.quota_tracker import quota_tracker
+from app.core.persistence import load_history, save_run, delete_run
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -32,8 +33,12 @@ router = APIRouter()
 # In-memory storage for pipeline runs
 pipeline_runs: Dict[str, Dict[str, Any]] = {}
 uploaded_repos: Dict[str, Dict[str, Any]] = {}
-pipeline_tasks: Dict[str, asyncio.Task] = {}  # Store running tasks for cancellation
-ws_connections: Dict[str, list] = {}  # Active WebSocket connections per run_id
+pipeline_tasks: Dict[str, asyncio.Task] = {}
+ws_connections: Dict[str, list] = {}
+
+# Load persisted history on startup
+_persisted = load_history()
+pipeline_runs.update(_persisted)
 
 # Configuration
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100MB
@@ -158,6 +163,46 @@ async def reset_llm_quota():
         "key_error": key_error,
         "status": quota_tracker.to_dict(),
     }
+
+
+# ============================================================================
+# GET /api/history          — list all past runs
+# GET /api/history/{run_id} — single run summary
+# DELETE /api/history/{run_id} — remove from history
+# ============================================================================
+
+@router.get("/history", summary="List all pipeline run history")
+async def get_history():
+    """Returns a list of all pipeline runs (completed, failed, cancelled)."""
+    history = load_history()
+    # Merge with in-memory runs that may not be persisted yet
+    for run_id, run_data in pipeline_runs.items():
+        if run_id not in history and run_data.get("status") in ("COMPLETED", "FAILED", "CANCELLED"):
+            from app.core.persistence import _summarise
+            history[run_id] = _summarise(run_id, run_data)
+
+    runs = sorted(history.values(), key=lambda r: r.get("started_at", ""), reverse=True)
+    return {"runs": runs, "total": len(runs)}
+
+
+@router.get("/history/{run_id}", summary="Get single run history entry")
+async def get_history_entry(run_id: str):
+    """Returns the summary for a specific run."""
+    history = load_history()
+    if run_id in history:
+        return history[run_id]
+    if run_id in pipeline_runs:
+        from app.core.persistence import _summarise
+        return _summarise(run_id, pipeline_runs[run_id])
+    raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+
+@router.delete("/history/{run_id}", summary="Delete a run from history")
+async def delete_history_entry(run_id: str):
+    """Remove a run from the persistent history."""
+    delete_run(run_id)
+    pipeline_runs.pop(run_id, None)
+    return {"message": f"Run {run_id} deleted from history"}
 
 
 # ============================================================================
@@ -426,10 +471,19 @@ async def start_pipeline(
     # Generate run ID
     run_id = f"run_{hashlib.sha256(f'{request.repo_id}_{datetime.utcnow().isoformat()}'.encode()).hexdigest()[:16]}"
     
+    # Auto-detect source language from ZIP contents
+    source_language = _detect_language_from_zip(repo_data["file_path"])
+    logger.info(f"Auto-detected source language: {source_language} for repo: {request.repo_id}")
+
+    # Derive a human-readable repo name
+    repo_name = repo_data.get("filename", "").replace(".zip", "") or repo_data.get("source_url", "").split("/")[-1].replace(".git", "") or request.repo_id
+
     # Initialize pipeline run status
     pipeline_runs[run_id] = {
         "run_id": run_id,
         "repo_id": request.repo_id,
+        "repo_name": repo_name,
+        "source_language": source_language,
         "target_language": request.target_language,
         "status": "RUNNING",
         "phase": "INGESTION",
@@ -444,12 +498,6 @@ async def start_pipeline(
         "result": None,
         "error": None
     }
-    
-    # Auto-detect source language from ZIP contents
-    source_language = _detect_language_from_zip(repo_data["file_path"])
-    logger.info(f"Auto-detected source language: {source_language} for repo: {request.repo_id}")
-
-    # Start pipeline in background and store the task
     task = asyncio.create_task(
         execute_pipeline(
             run_id=run_id,
@@ -659,6 +707,8 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str, so
             "dependency_nodes": dep_nodes,
             "tokens_used": tokens_used,
         }
+        # Persist to disk
+        save_run(run_id, pipeline_runs[run_id])
         await ws_broadcast(run_id, {
             "type": "PIPELINE_COMPLETE",
             "run_id": run_id,
@@ -738,6 +788,7 @@ async def execute_pipeline(run_id: str, repo_path: str, target_language: str, so
         pipeline_runs[run_id]["error"] = error_msg
         pipeline_runs[run_id]["error_type"] = error_type
         pipeline_runs[run_id]["completed_at"] = datetime.utcnow().isoformat()
+        save_run(run_id, pipeline_runs[run_id])
         await ws_broadcast(run_id, {
             "type": error_type,
             "run_id": run_id,
@@ -778,22 +829,29 @@ async def generate_output_package(run_id: str, result) -> str:
             if output_stem[0].isdigit():
                 output_stem = "mod_" + output_stem
 
-        # Collision avoidance
-        if output_stem in used_names:
-            used_names[output_stem] += 1
-            final_stem = f"{output_stem}_{used_names[output_stem]}"
-        else:
-            used_names[output_stem] = 0
-            final_stem = output_stem
-
-        py_filename = f"{final_stem}.py"
-        out_path    = src_dir / py_filename
-        rel_out     = f"src/{py_filename}"
-
-        # ── Compute original relative path ───────────────────────────
-        # source_path is an absolute temp path; extract the meaningful part
-        # by stripping everything up to the first non-temp segment
+        # ── Mirror original directory structure ──────────────────────
         orig_rel = _make_relative_path(source_path)
+        # Build the mirrored subdirectory path inside src/
+        orig_rel_path = Path(orig_rel)
+        # Replace source extension with .py, keep subdirs
+        mirrored_rel = orig_rel_path.with_suffix(".py")
+        # Sanitize each path component
+        clean_parts = [_re.sub(r'[^\w/._-]', '_', p) for p in mirrored_rel.parts]
+        mirrored_rel = Path(*clean_parts) if clean_parts else Path(f"{output_stem}.py")
+
+        out_path = src_dir / mirrored_rel
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Collision avoidance (same stem in same dir)
+        stem_key = str(mirrored_rel)
+        if stem_key in used_names:
+            used_names[stem_key] += 1
+            out_path = out_path.with_stem(f"{out_path.stem}_{used_names[stem_key]}")
+        else:
+            used_names[stem_key] = 0
+
+        py_filename = out_path.name
+        rel_out = f"src/{mirrored_rel.as_posix()}"
 
         if trans_result.translated_code:
             out_path.write_text(trans_result.translated_code, encoding="utf-8")
@@ -839,6 +897,70 @@ async def generate_output_package(run_id: str, result) -> str:
         "# Python dependencies for modernized code\n# Add any third-party packages here\n",
         encoding="utf-8",
     )
+
+    # ── Generate pytest stubs ────────────────────────────────────────
+    tests_dir = repo_dir / "tests"
+    tests_dir.mkdir(exist_ok=True)
+    (tests_dir / "__init__.py").write_text("", encoding="utf-8")
+
+    for trans_result in result.translation_results:
+        if not trans_result.translated_code:
+            continue
+        source_path = getattr(trans_result, "source_file", "") or trans_result.module_name.split(":")[0]
+        orig_rel = _make_relative_path(source_path)
+        orig_rel_path = Path(orig_rel)
+        mirrored_rel = orig_rel_path.with_suffix(".py")
+        module_import = "src." + ".".join(mirrored_rel.with_suffix("").parts)
+        module_name = mirrored_rel.stem
+
+        # Extract top-level function/class names from translated code
+        import re as _re2
+        func_names = _re2.findall(r'^def (\w+)\(', trans_result.translated_code, _re2.MULTILINE)
+        class_names = _re2.findall(r'^class (\w+)', trans_result.translated_code, _re2.MULTILINE)
+
+        stub_lines = [
+            f'"""Auto-generated pytest stubs for {orig_rel}"""',
+            f"import pytest",
+            f"# from {module_import} import *  # uncomment after verifying imports",
+            "",
+        ]
+        for fn in func_names[:10]:  # cap at 10 stubs per file
+            stub_lines += [
+                f"def test_{fn}():",
+                f'    """Test {fn} from {module_name}."""',
+                f"    # TODO: implement test",
+                f"    pass",
+                "",
+            ]
+        for cls in class_names[:5]:
+            stub_lines += [
+                f"class Test{cls}:",
+                f'    """Tests for {cls}."""',
+                "",
+                f"    def test_init(self):",
+                f'        """Test {cls} instantiation."""',
+                f"        # TODO: implement test",
+                f"        pass",
+                "",
+            ]
+        if not func_names and not class_names:
+            stub_lines += [
+                f"def test_{module_name}_placeholder():",
+                f'    """Placeholder test for {module_name}."""',
+                f"    pass",
+                "",
+            ]
+
+        # Mirror directory structure in tests/
+        test_rel = Path("test_" + mirrored_rel.name)
+        if mirrored_rel.parent != Path("."):
+            test_dir = tests_dir / mirrored_rel.parent
+            test_dir.mkdir(parents=True, exist_ok=True)
+            test_file = test_dir / test_rel
+        else:
+            test_file = tests_dir / test_rel
+
+        test_file.write_text("\n".join(stub_lines), encoding="utf-8")
 
     # ── Write MIGRATION_GUIDE.md ─────────────────────────────────────
     guide_lines = [
