@@ -16,8 +16,9 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-FENCE_OPEN  = re.compile(r'^```[a-zA-Z]*\s*', re.MULTILINE)
-FENCE_CLOSE = re.compile(r'\s*```\s*$',        re.MULTILINE)
+# Pre-compiled fence patterns — avoids backtick literals in regex strings
+_FENCE_OPEN  = re.compile(r"^[`]{3}[a-zA-Z]*\s*", re.MULTILINE)
+_FENCE_CLOSE = re.compile(r"\s*[`]{3}\s*$",        re.MULTILINE)
 
 
 class TranslationStatus(Enum):
@@ -43,8 +44,8 @@ class TranslationResult:
 
 class TranslationStore:
     def __init__(self):
-        self._cache:       Dict[str, TranslationResult] = {}
-        self._hash_index:  Dict[str, str]               = {}
+        self._cache:      Dict[str, TranslationResult] = {}
+        self._hash_index: Dict[str, str]               = {}
 
     def get_by_hash(self, source_hash: str) -> Optional[TranslationResult]:
         name = self._hash_index.get(source_hash)
@@ -70,6 +71,14 @@ class TranslationOrchestrator:
         self.translation_store = translation_store or TranslationStore()
         self.settings          = get_settings()
         self._prompt_version   = "1.0.0"
+
+        # Wire in the context optimizer
+        if context_optimizer is not None:
+            self.context_optimizer = context_optimizer
+        else:
+            from app.context_optimizer.optimizer import ContextOptimizer
+            self.context_optimizer = ContextOptimizer()
+
         logger.info("TranslationOrchestrator initialized")
 
     # ------------------------------------------------------------------ #
@@ -155,7 +164,7 @@ class TranslationOrchestrator:
                     source_hash=source_hash,
                 )
 
-        source_context          = self._build_source_context(node, dependency_graph, ast_index)
+        source_context             = self._build_source_context(node, dependency_graph, ast_index)
         system_prompt, user_prompt = self._build_prompts(source_context, node.name, node.node_type, target_language)
 
         # LLM call
@@ -210,13 +219,13 @@ class TranslationOrchestrator:
     def _derive_output_filename(self, node: ASTNode) -> str:
         src   = node.file_path or ""
         stem  = Path(src).stem if src else node.name
-        clean = re.sub(r'[^\w]', '_', stem.lower()).strip('_') or "module"
+        clean = re.sub(r"[^\w]", "_", stem.lower()).strip("_") or "module"
         if clean[0].isdigit():
             clean = "mod_" + clean
         return clean
 
     # ------------------------------------------------------------------ #
-    # Context building                                                     #
+    # Context building — uses ContextOptimizer for token-aware pruning    #
     # ------------------------------------------------------------------ #
 
     def _build_source_context(
@@ -225,22 +234,36 @@ class TranslationOrchestrator:
         dependency_graph: nx.DiGraph,
         ast_index:        Dict[str, ASTNode],
     ) -> str:
-        MAX_CHARS = self.settings.MAX_TOKEN_LIMIT * 3
-        parts = [f"--- FILE: {node.file_path} ---\n{node.raw_source}"]
-        used  = len(parts[0])
+        """Build the source context to send to the LLM.
 
-        if node.id in dependency_graph:
-            for dep_id in dependency_graph.successors(node.id):
-                dep_node = ast_index.get(dep_id)
-                if dep_node is None:
-                    continue
-                chunk = f"\n--- DEPENDENCY: {dep_node.file_path} ---\n{dep_node.raw_source}"
-                if used + len(chunk) > MAX_CHARS:
-                    break
-                parts.append(chunk)
-                used += len(chunk)
+        Uses ContextOptimizer (BFS + token estimation + pruning) when the
+        node is in the dependency graph.  Falls back to raw source only
+        when the node has no graph entry (isolated file).
+        """
+        if node.id not in dependency_graph:
+            return f"--- FILE: {node.file_path} ---\n{node.raw_source}"
 
-        return "\n".join(parts)
+        try:
+            optimized = self.context_optimizer.optimize_context(
+                target_node_id=node.id,
+                dependency_graph=dependency_graph,
+                ast_index=ast_index,
+            )
+            logger.debug(
+                f"Context optimized for {node.name}: "
+                f"{len(optimized.included_nodes)} included, "
+                f"{len(optimized.excluded_nodes)} excluded, "
+                f"{optimized.estimated_tokens} tokens",
+                extra={"stage_name": "translation_orchestration"},
+            )
+            return optimized.combined_source
+
+        except Exception as e:
+            logger.warning(
+                f"Context optimizer failed for {node.name} ({e}), using raw source",
+                extra={"stage_name": "translation_orchestration"},
+            )
+            return f"--- FILE: {node.file_path} ---\n{node.raw_source}"
 
     # ------------------------------------------------------------------ #
     # Prompt building                                                      #
@@ -288,25 +311,21 @@ class TranslationOrchestrator:
         return system_part, formatted_user
 
     # ------------------------------------------------------------------ #
-    # Response parsing — 3-tier fallback, NO regex with backticks         #
+    # Response parsing — 3-tier fallback, no backtick literals in source  #
     # ------------------------------------------------------------------ #
 
     def _parse_response(
         self, raw: str, node_id: str
     ) -> Tuple[str, List[str], str, Optional[str]]:
-        """Extract translated_code, deps, notes from LLM response.
-
-        Returns (translated_code, deps, notes, error_msg).
-        error_msg is None on success.
-        """
+        """Extract translated_code, deps, notes from LLM response."""
         if not raw or not raw.strip():
             return "", [], "", "Empty LLM response"
 
         text = raw.strip()
 
-        # Strip markdown fences using pre-compiled patterns (no backticks in source)
-        text = FENCE_OPEN.sub("",  text)
-        text = FENCE_CLOSE.sub("", text)
+        # Strip markdown fences using pre-compiled patterns
+        text = _FENCE_OPEN.sub("",  text)
+        text = _FENCE_CLOSE.sub("", text)
         text = text.strip()
 
         # --- Attempt 1: find outermost JSON object ---
@@ -337,8 +356,7 @@ class TranslationOrchestrator:
         # --- Attempt 2: regex extract translated_code string value ---
         m = re.search(r'"translated_code"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
         if m:
-            code = m.group(1)
-            code = (code
+            code = (m.group(1)
                     .replace("\\n",  "\n")
                     .replace("\\t",  "\t")
                     .replace('\\"',  '"')
@@ -348,8 +366,7 @@ class TranslationOrchestrator:
                 return code, [], "Extracted via regex fallback", None
 
         # --- Attempt 3: treat entire response as raw Python ---
-        python_keywords = ("def ", "class ", "import ", "print(", "# ")
-        if any(kw in text for kw in python_keywords):
+        if any(kw in text for kw in ("def ", "class ", "import ", "print(", "# ")):
             logger.warning(f"LLM returned raw Python for {node_id}, using as-is")
             return text, [], "LLM returned raw Python without JSON wrapper", None
 
