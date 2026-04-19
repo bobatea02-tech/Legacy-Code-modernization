@@ -1,6 +1,10 @@
 <div align="center">
 
-<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=40&duration=3000&pause=1000&color=6366F1&center=true&vCenter=true&width=800&height=90&lines=MODERNIZE+NOW;COBOL+%2F+Java+%E2%86%92+Python+3;AI-Powered+Code+Migration" alt="Typing SVG" />
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=42&duration=2500&pause=800&color=6366F1&center=true&vCenter=true&width=800&height=70&lines=MODERNIZE+NOW" alt="title" />
+
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=28&duration=2500&pause=800&color=F59E0B&center=true&vCenter=true&width=800&height=55&lines=COBOL+%2F+Java+%E2%86%92+Python+3" alt="subtitle" />
+
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=18&duration=2500&pause=800&color=10B981&center=true&vCenter=true&width=800&height=40&lines=AI-Powered+Code+Migration+Pipeline" alt="tagline" />
 
 <br/>
 
@@ -264,6 +268,6 @@ cd frontend && npm run dev          # → http://localhost:5173
 
 **Built with ❤️ — COBOL to Python, one file at a time.**
 
-<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=14&duration=4000&pause=2000&color=6366F1&center=true&vCenter=true&width=500&lines=Legacy+code+doesn't+have+to+stay+legacy." alt="footer" />
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=15&duration=4000&pause=2000&color=F59E0B&center=true&vCenter=true&width=600&lines=Legacy+code+doesn%27t+have+to+stay+legacy.;One+file+at+a+time.+%F0%9F%9A%80" alt="footer" />
 
 </div>
