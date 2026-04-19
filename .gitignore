@@ -60,7 +60,16 @@ temp/
 *.tmp
 temp_repos/
 .temp_test/
+backend/temp_repos/
+backend/logs/
 
-# Reports (generated)
-# reports/*.json
-# reports/*.md
+# Build artifacts
+frontend/dist/
+frontend/bun.lock
+frontend/bun.lockb
+
+# Reports (generated at runtime)
+reports/
+
+# Translation samples (generated at runtime)
+translation_samples/
