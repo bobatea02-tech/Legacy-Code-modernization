@@ -1,7 +1,6 @@
 <div align="center">
 
-<!-- Animated title using SVG -->
-<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=36&duration=3000&pause=1000&color=6366F1&center=true&vCenter=true&width=700&height=80&lines=MODERNIZE+NOW;Legacy+Code+%E2%86%92+Modern+Python;COBOL+%2F+Java+%E2%86%92+Python+3" alt="Typing SVG" />
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=40&duration=3000&pause=1000&color=6366F1&center=true&vCenter=true&width=800&height=90&lines=MODERNIZE+NOW;COBOL+%2F+Java+%E2%86%92+Python+3;AI-Powered+Code+Migration" alt="Typing SVG" />
 
 <br/>
 
@@ -13,54 +12,140 @@
 
 <br/><br/>
 
-> **AI-powered pipeline that translates legacy COBOL & Java repositories into clean, modern Python — with real-time progress, side-by-side inspection, and full artifact downloads.**
+**AI-powered pipeline that translates legacy COBOL & Java repositories into clean, modern Python — with real-time progress, side-by-side inspection, and full artifact downloads.**
 
 </div>
 
 ---
 
-## ⚡ What It Does — In One Look
+## 🔄 How It Works
 
-```
-  Your Legacy Repo                                    Modernized Output
-  ─────────────────                                   ─────────────────
-  📁 COBOL / Java                                     📁 modernized_repo/
-     ├── MYPROG.cbl          ┌─────────────────┐         ├── src/
-     ├── sub/SUB.cbl   ────► │  9-Phase AI     │ ────►      ├── myprog.py
-     ├── copybooks/    ────► │  Pipeline       │            ├── sub/
-     └── ...           ────► │  (Gemini LLM)   │            │   └── sub.py
-                             └─────────────────┘         ├── tests/          ← pytest stubs
-                                                         ├── MIGRATION_GUIDE.md ← file map
-                                                         └── requirements.txt
+```mermaid
+flowchart LR
+    A([📁 Legacy Repo\nCOBOL / Java]) --> B[Upload ZIP\nor Git URL]
+    B --> C{9-Phase\nAI Pipeline}
+    C --> D([📦 modernized_repo.zip\nPython source])
+    C --> E([📋 MIGRATION_GUIDE.md\nFile mapping])
+    C --> F([🧪 pytest stubs\nAuto-generated])
+    C --> G([📊 Reports\nValidation · Benchmark])
+
+    style A fill:#1e1b4b,color:#a5b4fc,stroke:#6366f1
+    style C fill:#312e81,color:#e0e7ff,stroke:#6366f1,stroke-width:2px
+    style D fill:#1e1b4b,color:#a5b4fc,stroke:#6366f1
+    style E fill:#1e1b4b,color:#a5b4fc,stroke:#6366f1
+    style F fill:#1e1b4b,color:#a5b4fc,stroke:#6366f1
+    style G fill:#1e1b4b,color:#a5b4fc,stroke:#6366f1
 ```
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
+```mermaid
+graph TB
+    subgraph FE["🖥️  Frontend  (React + Vite)"]
+        direction LR
+        P1[INTAKE\nUpload / Git URL]
+        P2[PIPELINE\nLive Progress]
+        P3[RESULTS\nDownloads]
+        P4[INSPECT\nCode Viewer]
+        P5[HISTORY\nAll Runs]
+    end
+
+    subgraph BE["⚙️  Backend  (FastAPI)"]
+        direction TB
+        R1[REST API\n/api/*]
+        WS[WebSocket\n/api/v1/pipeline/ws]
+        subgraph PIPE["9-Phase Pipeline"]
+            direction LR
+            S1[① Ingest] --> S2[② Parse AST]
+            S2 --> S3[③ Dep Graph]
+            S3 --> S4[④ Context\nOptimizer]
+            S4 --> S5[⑤ Translate]
+            S5 --> S6[⑥ Validate]
+            S6 --> S7[⑦ Determinism]
+            S7 --> S8[⑧ Benchmark]
+            S8 --> S9[⑨ Report]
+        end
+    end
+
+    subgraph EXT["🌐  External"]
+        LLM[Google Gemini\nLLM API]
+        GIT[GitHub\nGit Clone]
+    end
+
+    FE -->|HTTP| R1
+    FE <-->|Real-time| WS
+    PIPE -->|generate_content| LLM
+    R1 -->|clone| GIT
+    PIPE --> OUT[(📦 Artifacts\n5 ZIPs)]
+
+    style FE fill:#1e1b4b,color:#e0e7ff,stroke:#6366f1
+    style BE fill:#0f172a,color:#e0e7ff,stroke:#6366f1
+    style PIPE fill:#1e293b,color:#e0e7ff,stroke:#4f46e5
+    style EXT fill:#0f172a,color:#e0e7ff,stroke:#6366f1
+    style OUT fill:#1e1b4b,color:#a5b4fc,stroke:#6366f1
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         FRONTEND  (React + Vite)                    │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────┐ │
-│  │  INTAKE  │  │ PIPELINE │  │ RESULTS  │  │ INSPECT  │  │HIST. │ │
-│  │ ZIP/Git  │  │ Live WS  │  │Downloads │  │Side-by-  │  │ All  │ │
-│  │  Upload  │  │ Progress │  │  5 ZIPs  │  │  Side    │  │ Runs │ │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──┬───┘ │
-└───────┼─────────────┼─────────────┼──────────────┼────────────┼────┘
-        │             │  WebSocket  │              │            │
-        ▼             ▼             ▼              ▼            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         BACKEND  (FastAPI)                          │
-│                                                                     │
-│  ① INGEST ──► ② PARSE ──► ③ DEP GRAPH ──► ④ CONTEXT OPT          │
-│                                                    │                │
-│  ⑨ REPORT ◄── ⑧ BENCHMARK ◄── ⑦ DETERMINISM ◄── ⑤ TRANSLATE     │
-│       │                                            │                │
-│       ▼                                     Gemini LLM API          │
-│  5 Artifact ZIPs                                                    │
-│  + MIGRATION_GUIDE.md                                               │
-│  + pytest stubs                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+
+---
+
+## 🔬 The 9-Phase Pipeline
+
+```mermaid
+flowchart TD
+    I([ZIP / Git URL]) --> P1
+
+    P1["① INGESTION\nExtract · Validate · Hash"]
+    P2["② AST PARSE\nCOBOL PROGRAM-ID\nJava class definitions"]
+    P3["③ DEPENDENCY GRAPH\nNetworkX DiGraph\nCALL · PERFORM · import"]
+    P4["④ CONTEXT OPTIMIZER\nBFS traversal · Token budget\nDead code pruning"]
+    P5["⑤ TRANSLATION\nGemini LLM\nTopological order"]
+    P6["⑥ VALIDATION\nSyntax · Structure\nSymbols · Deps"]
+    P7["⑦ DETERMINISM\nSHA-256 hash\nCross-run verification"]
+    P8["⑧ BENCHMARK\nToken efficiency\nLatency metrics"]
+    P9["⑨ REPORT GENERATION\n5 ZIPs · Migration Guide\npytest stubs"]
+
+    P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9
+
+    P1:::phase
+    P2:::phase
+    P3:::phase
+    P4:::phase
+    P5:::llm
+    P6:::phase
+    P7:::phase
+    P8:::phase
+    P9:::output
+
+    classDef phase fill:#1e293b,color:#a5b4fc,stroke:#6366f1,rx:8
+    classDef llm   fill:#312e81,color:#e0e7ff,stroke:#818cf8,stroke-width:2px,rx:8
+    classDef output fill:#064e3b,color:#6ee7b7,stroke:#10b981,rx:8
+```
+
+---
+
+## 📦 Output Structure
+
+```mermaid
+graph LR
+    ZIP["📦 modernized_repo.zip"]
+
+    ZIP --> SRC["📁 src/\nMirrors original\ndirectory structure"]
+    ZIP --> TST["🧪 tests/\nAuto-generated\npytest stubs"]
+    ZIP --> MG["📋 MIGRATION_GUIDE.md\nOriginal → Python\nfile mapping table"]
+    ZIP --> REQ["📄 requirements.txt"]
+
+    SRC --> F1["myprog.py\n← MYPROG.cbl"]
+    SRC --> F2["sub/sub.py\n← sub/SUB.cbl"]
+    SRC --> F3["userservice.py\n← UserService.java"]
+
+    TST --> T1["test_myprog.py\ndef test_main()\nclass TestMYPROG"]
+
+    style ZIP fill:#064e3b,color:#6ee7b7,stroke:#10b981,stroke-width:2px
+    style SRC fill:#1e293b,color:#a5b4fc,stroke:#6366f1
+    style TST fill:#1e293b,color:#a5b4fc,stroke:#6366f1
+    style MG  fill:#1e293b,color:#a5b4fc,stroke:#6366f1
+    style REQ fill:#1e293b,color:#a5b4fc,stroke:#6366f1
 ```
 
 ---
@@ -72,25 +157,19 @@
 ```bash
 git clone https://github.com/bobatea02-tech/Legacy-Code-modernization.git
 cd Legacy-Code-modernization
-```
 
-```bash
 # Backend
-cd backend
-pip install -r requirements.txt
-```
+cd backend && pip install -r requirements.txt
 
-```bash
 # Frontend
-cd frontend
-npm install
+cd ../frontend && npm install
 ```
 
 ### 2 — Configure
 
 ```bash
 # backend/.env
-LLM_API_KEY=AIzaSy...          # from https://aistudio.google.com/apikey
+LLM_API_KEY=AIzaSy...                    # https://aistudio.google.com/apikey
 LLM_MODEL_NAME=models/gemini-2.0-flash
 MAX_TOKEN_LIMIT=8000
 CONTEXT_EXPANSION_DEPTH=2
@@ -99,149 +178,76 @@ CONTEXT_EXPANSION_DEPTH=2
 ### 3 — Run
 
 ```bash
-# Terminal 1 — Backend
-cd backend && python main.py        # http://localhost:8000
+# Terminal 1
+cd backend && python main.py        # → http://localhost:8000
 
-# Terminal 2 — Frontend
-cd frontend && npm run dev          # http://localhost:5173
-```
-
----
-
-## 🔄 The 9-Phase Pipeline
-
-| # | Phase | What Happens |
-|---|-------|-------------|
-| 1 | **INGESTION** | ZIP extracted / Git repo cloned, files validated & hashed |
-| 2 | **AST_PARSE** | COBOL/Java files parsed into normalized AST nodes |
-| 3 | **DEPENDENCY_GRAPH** | NetworkX directed graph built from CALL/PERFORM/import refs |
-| 4 | **CONTEXT_PRUNING** | BFS optimizer selects minimal token-aware context per node |
-| 5 | **TRANSLATION** | Gemini LLM translates each node to Python (topological order) |
-| 6 | **VALIDATION** | Syntax, structure, symbol preservation checks |
-| 7 | **DETERMINISM** | SHA-256 hash verification across runs |
-| 8 | **BENCHMARK** | Token efficiency & latency metrics |
-| 9 | **REPORT_GENERATION** | 5 artifact ZIPs + MIGRATION_GUIDE.md + pytest stubs |
-
----
-
-## 📦 Output Artifacts
-
-Every completed run produces **5 downloadable ZIPs**:
-
-```
-modernized_repo.zip          ← Python source (mirrors original dir structure)
-  ├── src/
-  │   ├── myprog.py          ← Translated COBOL → Python
-  │   └── sub/sub.py
-  ├── tests/
-  │   └── test_myprog.py     ← Auto-generated pytest stubs
-  ├── MIGRATION_GUIDE.md     ← Full file mapping table
-  └── requirements.txt
-
-validation_report.zip        ← Per-module syntax/structure checks
-benchmark_report.zip         ← Token efficiency metrics
-failure_analysis.zip         ← Failed translations with error details
-determinism_proof.zip        ← Hash verification & prompt versions
+# Terminal 2
+cd frontend && npm run dev          # → http://localhost:5173
 ```
 
 ---
 
 ## 🖥️ Frontend Pages
 
-| Page | Purpose |
-|------|---------|
-| **HOME** | Landing page |
-| **INTAKE** | Upload ZIP or paste Git URL → configure & launch |
-| **PIPELINE** | Live 9-phase progress via WebSocket, cancel button, quota banner |
-| **RESULTS** | Metrics dashboard + 5 download buttons |
-| **INSPECT** | Side-by-side original vs translated code, validation matrix, failure table |
-| **HISTORY** | All past runs — re-download, re-inspect, delete |
+| Page | What You Do |
+|------|-------------|
+| **INTAKE** | Upload a ZIP or paste a GitHub URL, hit START |
+| **PIPELINE** | Watch all 9 phases update live via WebSocket |
+| **RESULTS** | Download 5 artifact ZIPs when complete |
+| **INSPECT** | Side-by-side original vs translated code, validation matrix |
+| **HISTORY** | Every past run — re-download, re-inspect, delete |
 
 ---
 
-## 🔑 Navbar Indicators
-
-```
-[ 🔑 ████░░ 42% ]   [ ● CONNECTED ]
-    ↑                      ↑
-  API quota             Backend status
-  (live usage bar)      (polls /api/health)
-
-When exhausted → [ 🔑 NEW_API_KEY_NEEDED ]
-Click → tooltip with reset button (reloads .env without restart)
-```
-
----
-
-## ⚙️ Key Config Options
+## ⚙️ Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LLM_API_KEY` | — | Gemini API key (required) |
-| `LLM_MODEL_NAME` | `models/gemini-2.0-flash` | Model to use |
-| `MAX_TOKEN_LIMIT` | `8000` | Token budget per translation |
+| `LLM_MODEL_NAME` | `models/gemini-2.0-flash` | Model — 1,500 req/day free |
+| `MAX_TOKEN_LIMIT` | `8000` | Token budget per file |
 | `CONTEXT_EXPANSION_DEPTH` | `2` | BFS depth for dependency context |
-| `CACHE_ENABLED` | `True` | Cache successful LLM responses |
-| `LOG_LEVEL` | `INFO` | Logging verbosity |
+| `CACHE_ENABLED` | `True` | Cache successful translations |
 
 ---
 
 ## 🛠️ Tech Stack
 
-```
-Backend                          Frontend
-───────                          ────────
-FastAPI + Uvicorn                React 18 + Vite
-NetworkX (dependency graph)      Zustand (state)
-google-genai (Gemini SDK)        Framer Motion (animations)
-Pydantic v2 (validation)         TailwindCSS
-Loguru (logging)                 React Router v6
-Python 3.11+                     TypeScript
-```
+```mermaid
+graph LR
+    subgraph Back["Backend"]
+        B1[FastAPI] --- B2[NetworkX]
+        B2 --- B3[google-genai]
+        B3 --- B4[Pydantic v2]
+        B4 --- B5[Loguru]
+    end
+    subgraph Front["Frontend"]
+        F1[React 18] --- F2[Zustand]
+        F2 --- F3[Framer Motion]
+        F3 --- F4[TailwindCSS]
+        F4 --- F5[TypeScript]
+    end
 
----
-
-## 📁 Project Structure
-
-```
-Legacy-Code-modernization/
-├── backend/
-│   ├── app/
-│   │   ├── api/              ← FastAPI routes + WebSocket
-│   │   ├── parsers/          ← COBOL & Java AST parsers
-│   │   ├── translation/      ← Orchestrator + LLM integration
-│   │   ├── context_optimizer/← BFS token-aware context pruning
-│   │   ├── dependency_graph/ ← NetworkX graph builder
-│   │   ├── validation/       ← Post-translation checks
-│   │   ├── llm/              ← Gemini client + quota tracker
-│   │   └── core/             ← Config, logging, persistence, cleanup
-│   ├── data/                 ← Persistent run history (JSON)
-│   ├── prompts/              ← code_translation.txt
-│   └── main.py
-├── frontend/
-│   └── src/
-│       ├── pages/            ← IntakeView, PipelineView, ResultsView,
-│       │                        InspectView, HistoryView
-│       ├── hooks/            ← useWebSocket, useInspectData,
-│       │                        useBackendStatus, useApiKeyStatus
-│       ├── stores/           ← pipelineStore (Zustand)
-│       └── services/         ← api.ts (REST + WebSocket client)
-└── README.md
+    style Back fill:#0f172a,color:#a5b4fc,stroke:#6366f1
+    style Front fill:#0f172a,color:#a5b4fc,stroke:#6366f1
 ```
 
 ---
 
-## 🔒 Security
+## 🔒 Security & Reliability
 
-- **Zip Slip protection** — path traversal prevention on all ZIP extractions
-- **File size limits** — 100MB upload cap, 10MB per file
-- **Temp file cleanup** — auto-deletes outputs older than 24h
-- **Error response filtering** — failed LLM responses never cached
+- **Zip Slip protection** — path traversal prevention on all extractions
+- **Rate limit handling** — quota exhaustion detected, pipeline stops cleanly
+- **No bad cache** — failed LLM responses are never cached
+- **Auto cleanup** — temp files deleted after 24 hours
+- **Persistent history** — run history survives backend restarts
 
 ---
 
 <div align="center">
 
 **Built with ❤️ — COBOL to Python, one file at a time.**
+
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=14&duration=4000&pause=2000&color=6366F1&center=true&vCenter=true&width=500&lines=Legacy+code+doesn't+have+to+stay+legacy." alt="footer" />
 
 </div>
