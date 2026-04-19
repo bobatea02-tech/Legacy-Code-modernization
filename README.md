@@ -1,135 +1,247 @@
-# Legacy Code Modernizer
+<div align="center">
 
-A secure and robust repository ingestion system for processing legacy code archives.
+<!-- Animated title using SVG -->
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=36&duration=3000&pause=1000&color=6366F1&center=true&vCenter=true&width=700&height=80&lines=MODERNIZE+NOW;Legacy+Code+%E2%86%92+Modern+Python;COBOL+%2F+Java+%E2%86%92+Python+3" alt="Typing SVG" />
 
-## Features
+<br/>
 
-### Repository Ingestion Module
+<img src="https://img.shields.io/badge/Python-3.11+-6366f1?style=for-the-badge&logo=python&logoColor=white"/>
+<img src="https://img.shields.io/badge/FastAPI-0.129-6366f1?style=for-the-badge&logo=fastapi&logoColor=white"/>
+<img src="https://img.shields.io/badge/React-18-6366f1?style=for-the-badge&logo=react&logoColor=white"/>
+<img src="https://img.shields.io/badge/Gemini-2.0_Flash-6366f1?style=for-the-badge&logo=google&logoColor=white"/>
+<img src="https://img.shields.io/badge/License-MIT-6366f1?style=for-the-badge"/>
 
-The core ingestion module (`app/ingestion/ingestor.py`) provides:
+<br/><br/>
 
-- **Security**: Zip Slip protection against path traversal attacks
-- **Validation**: Configurable limits for archive size, file size, and file count
-- **Language Detection**: Automatic detection of source file types (.java, .c, .cbl, etc.)
-- **Smart Filtering**: Ignores binary files, hidden files, and build directories
-- **Encoding Normalization**: Automatic detection and conversion to UTF-8
-- **Reproducibility**: SHA256 hashing for file integrity and caching
-- **Cross-Platform**: Works on Windows and Linux with proper path handling
+> **AI-powered pipeline that translates legacy COBOL & Java repositories into clean, modern Python — with real-time progress, side-by-side inspection, and full artifact downloads.**
 
-## Installation
+</div>
+
+---
+
+## ⚡ What It Does — In One Look
+
+```
+  Your Legacy Repo                                    Modernized Output
+  ─────────────────                                   ─────────────────
+  📁 COBOL / Java                                     📁 modernized_repo/
+     ├── MYPROG.cbl          ┌─────────────────┐         ├── src/
+     ├── sub/SUB.cbl   ────► │  9-Phase AI     │ ────►      ├── myprog.py
+     ├── copybooks/    ────► │  Pipeline       │            ├── sub/
+     └── ...           ────► │  (Gemini LLM)   │            │   └── sub.py
+                             └─────────────────┘         ├── tests/          ← pytest stubs
+                                                         ├── MIGRATION_GUIDE.md ← file map
+                                                         └── requirements.txt
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         FRONTEND  (React + Vite)                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────┐ │
+│  │  INTAKE  │  │ PIPELINE │  │ RESULTS  │  │ INSPECT  │  │HIST. │ │
+│  │ ZIP/Git  │  │ Live WS  │  │Downloads │  │Side-by-  │  │ All  │ │
+│  │  Upload  │  │ Progress │  │  5 ZIPs  │  │  Side    │  │ Runs │ │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──┬───┘ │
+└───────┼─────────────┼─────────────┼──────────────┼────────────┼────┘
+        │             │  WebSocket  │              │            │
+        ▼             ▼             ▼              ▼            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         BACKEND  (FastAPI)                          │
+│                                                                     │
+│  ① INGEST ──► ② PARSE ──► ③ DEP GRAPH ──► ④ CONTEXT OPT          │
+│                                                    │                │
+│  ⑨ REPORT ◄── ⑧ BENCHMARK ◄── ⑦ DETERMINISM ◄── ⑤ TRANSLATE     │
+│       │                                            │                │
+│       ▼                                     Gemini LLM API          │
+│  5 Artifact ZIPs                                                    │
+│  + MIGRATION_GUIDE.md                                               │
+│  + pytest stubs                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1 — Clone & Install
 
 ```bash
+git clone https://github.com/bobatea02-tech/Legacy-Code-modernization.git
+cd Legacy-Code-modernization
+```
+
+```bash
+# Backend
+cd backend
 pip install -r requirements.txt
 ```
 
-## Configuration
+```bash
+# Frontend
+cd frontend
+npm install
+```
 
-Create a `.env` file based on `.env.example`:
+### 2 — Configure
 
 ```bash
-cp .env.example .env
+# backend/.env
+LLM_API_KEY=AIzaSy...          # from https://aistudio.google.com/apikey
+LLM_MODEL_NAME=models/gemini-2.0-flash
+MAX_TOKEN_LIMIT=8000
+CONTEXT_EXPANSION_DEPTH=2
 ```
 
-Required settings:
-- `GEMINI_API_KEY`: Your Google Gemini API key
-- `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+### 3 — Run
 
-## Usage
+```bash
+# Terminal 1 — Backend
+cd backend && python main.py        # http://localhost:8000
 
-### Basic Ingestion
-
-```python
-from app.ingestion import RepositoryIngestor
-
-# Use context manager for automatic cleanup
-with RepositoryIngestor() as ingestor:
-    files = ingestor.ingest_zip("path/to/repository.zip")
-    
-    for file_meta in files:
-        print(f"{file_meta.relative_path} ({file_meta.language})")
+# Terminal 2 — Frontend
+cd frontend && npm run dev          # http://localhost:5173
 ```
 
-### Custom Configuration
+---
 
-```python
-from app.ingestion import RepositoryIngestor, IngestionConfig
+## 🔄 The 9-Phase Pipeline
 
-# Create custom config
-config = IngestionConfig()
-config.MAX_ARCHIVE_SIZE_MB = 100
-config.MAX_FILE_SIZE_MB = 5
-config.MAX_FILE_COUNT = 1000
+| # | Phase | What Happens |
+|---|-------|-------------|
+| 1 | **INGESTION** | ZIP extracted / Git repo cloned, files validated & hashed |
+| 2 | **AST_PARSE** | COBOL/Java files parsed into normalized AST nodes |
+| 3 | **DEPENDENCY_GRAPH** | NetworkX directed graph built from CALL/PERFORM/import refs |
+| 4 | **CONTEXT_PRUNING** | BFS optimizer selects minimal token-aware context per node |
+| 5 | **TRANSLATION** | Gemini LLM translates each node to Python (topological order) |
+| 6 | **VALIDATION** | Syntax, structure, symbol preservation checks |
+| 7 | **DETERMINISM** | SHA-256 hash verification across runs |
+| 8 | **BENCHMARK** | Token efficiency & latency metrics |
+| 9 | **REPORT_GENERATION** | 5 artifact ZIPs + MIGRATION_GUIDE.md + pytest stubs |
 
-# Add custom language support
-config.LANGUAGE_EXTENSIONS['.py'] = 'python'
-config.LANGUAGE_EXTENSIONS['.js'] = 'javascript'
+---
 
-with RepositoryIngestor(config=config) as ingestor:
-    files = ingestor.ingest_zip("path/to/repository.zip")
+## 📦 Output Artifacts
+
+Every completed run produces **5 downloadable ZIPs**:
+
+```
+modernized_repo.zip          ← Python source (mirrors original dir structure)
+  ├── src/
+  │   ├── myprog.py          ← Translated COBOL → Python
+  │   └── sub/sub.py
+  ├── tests/
+  │   └── test_myprog.py     ← Auto-generated pytest stubs
+  ├── MIGRATION_GUIDE.md     ← Full file mapping table
+  └── requirements.txt
+
+validation_report.zip        ← Per-module syntax/structure checks
+benchmark_report.zip         ← Token efficiency metrics
+failure_analysis.zip         ← Failed translations with error details
+determinism_proof.zip        ← Hash verification & prompt versions
 ```
 
-See `examples/ingestor_usage.py` for more examples.
+---
 
-## Project Structure
+## 🖥️ Frontend Pages
+
+| Page | Purpose |
+|------|---------|
+| **HOME** | Landing page |
+| **INTAKE** | Upload ZIP or paste Git URL → configure & launch |
+| **PIPELINE** | Live 9-phase progress via WebSocket, cancel button, quota banner |
+| **RESULTS** | Metrics dashboard + 5 download buttons |
+| **INSPECT** | Side-by-side original vs translated code, validation matrix, failure table |
+| **HISTORY** | All past runs — re-download, re-inspect, delete |
+
+---
+
+## 🔑 Navbar Indicators
 
 ```
-.
-├── app/
-│   ├── core/              # Core configuration and logging
-│   │   ├── config.py      # Pydantic settings management
-│   │   └── logging.py     # Loguru-based logging
-│   └── ingestion/         # Repository ingestion module
-│       ├── ingestor.py    # Main ingestion logic
-│       └── __init__.py
-├── tests/
-│   └── test_ingestor.py   # Comprehensive test suite
-├── examples/
-│   └── ingestor_usage.py  # Usage examples
-├── .env.example           # Environment template
-├── requirements.txt       # Python dependencies
+[ 🔑 ████░░ 42% ]   [ ● CONNECTED ]
+    ↑                      ↑
+  API quota             Backend status
+  (live usage bar)      (polls /api/health)
+
+When exhausted → [ 🔑 NEW_API_KEY_NEEDED ]
+Click → tooltip with reset button (reloads .env without restart)
+```
+
+---
+
+## ⚙️ Key Config Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_API_KEY` | — | Gemini API key (required) |
+| `LLM_MODEL_NAME` | `models/gemini-2.0-flash` | Model to use |
+| `MAX_TOKEN_LIMIT` | `8000` | Token budget per translation |
+| `CONTEXT_EXPANSION_DEPTH` | `2` | BFS depth for dependency context |
+| `CACHE_ENABLED` | `True` | Cache successful LLM responses |
+| `LOG_LEVEL` | `INFO` | Logging verbosity |
+
+---
+
+## 🛠️ Tech Stack
+
+```
+Backend                          Frontend
+───────                          ────────
+FastAPI + Uvicorn                React 18 + Vite
+NetworkX (dependency graph)      Zustand (state)
+google-genai (Gemini SDK)        Framer Motion (animations)
+Pydantic v2 (validation)         TailwindCSS
+Loguru (logging)                 React Router v6
+Python 3.11+                     TypeScript
+```
+
+---
+
+## 📁 Project Structure
+
+```
+Legacy-Code-modernization/
+├── backend/
+│   ├── app/
+│   │   ├── api/              ← FastAPI routes + WebSocket
+│   │   ├── parsers/          ← COBOL & Java AST parsers
+│   │   ├── translation/      ← Orchestrator + LLM integration
+│   │   ├── context_optimizer/← BFS token-aware context pruning
+│   │   ├── dependency_graph/ ← NetworkX graph builder
+│   │   ├── validation/       ← Post-translation checks
+│   │   ├── llm/              ← Gemini client + quota tracker
+│   │   └── core/             ← Config, logging, persistence, cleanup
+│   ├── data/                 ← Persistent run history (JSON)
+│   ├── prompts/              ← code_translation.txt
+│   └── main.py
+├── frontend/
+│   └── src/
+│       ├── pages/            ← IntakeView, PipelineView, ResultsView,
+│       │                        InspectView, HistoryView
+│       ├── hooks/            ← useWebSocket, useInspectData,
+│       │                        useBackendStatus, useApiKeyStatus
+│       ├── stores/           ← pipelineStore (Zustand)
+│       └── services/         ← api.ts (REST + WebSocket client)
 └── README.md
 ```
 
-## Testing
+---
 
-Run the test suite:
+## 🔒 Security
 
-```bash
-pytest tests/test_ingestor.py -v
-```
+- **Zip Slip protection** — path traversal prevention on all ZIP extractions
+- **File size limits** — 100MB upload cap, 10MB per file
+- **Temp file cleanup** — auto-deletes outputs older than 24h
+- **Error response filtering** — failed LLM responses never cached
 
-All tests include:
-- Basic ingestion workflow
-- Language detection
-- Security (path traversal protection)
-- File size limits
-- Ignored directories and files
-- SHA256 determinism
-- Cleanup verification
+---
 
-## Security Features
+<div align="center">
 
-### Zip Slip Protection
+**Built with ❤️ — COBOL to Python, one file at a time.**
 
-The ingestion module validates all ZIP archive members before extraction to prevent path traversal attacks:
-
-```python
-# This will raise PathTraversalError
-malicious_zip = "archive_with_../../etc/passwd.zip"
-ingestor.ingest_zip(malicious_zip)  # Raises PathTraversalError
-```
-
-### Size Limits
-
-Configurable limits prevent resource exhaustion:
-- Archive size: 500MB (default)
-- Individual file size: 10MB (default)
-- Total file count: 10,000 (default)
-
-## API (Coming Soon)
-
-FastAPI-based REST API for code translation and analysis.
-
-## License
-
-MIT
+</div>
