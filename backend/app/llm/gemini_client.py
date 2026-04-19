@@ -1,4 +1,4 @@
-﻿"""Gemini API client using the new google-genai SDK."""
+"""Gemini API client using the new google-genai SDK."""
 
 from typing import List
 from google import genai
