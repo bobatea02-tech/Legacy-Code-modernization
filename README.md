@@ -43,49 +43,72 @@ flowchart LR
 
 ```mermaid
 graph TB
-    subgraph FE["🖥️  Frontend  (React + Vite)"]
+    subgraph FE["🖥️  FRONTEND  ·  React + Vite  ·  localhost:5173"]
         direction LR
-        P1[INTAKE\nUpload / Git URL]
-        P2[PIPELINE\nLive Progress]
-        P3[RESULTS\nDownloads]
-        P4[INSPECT\nCode Viewer]
-        P5[HISTORY\nAll Runs]
+        P1["📥 INTAKE\nUpload ZIP\nor Git URL"]
+        P2["📡 PIPELINE\nLive WebSocket\nProgress"]
+        P3["📦 RESULTS\n5 Artifact\nDownloads"]
+        P4["🔍 INSPECT\nSide-by-Side\nCode Viewer"]
+        P5["🕓 HISTORY\nAll Past\nRuns"]
     end
 
-    subgraph BE["⚙️  Backend  (FastAPI)"]
-        direction TB
-        R1[REST API\n/api/*]
-        WS[WebSocket\n/api/v1/pipeline/ws]
-        subgraph PIPE["9-Phase Pipeline"]
-            direction LR
-            S1[① Ingest] --> S2[② Parse AST]
-            S2 --> S3[③ Dep Graph]
-            S3 --> S4[④ Context\nOptimizer]
-            S4 --> S5[⑤ Translate]
-            S5 --> S6[⑥ Validate]
-            S6 --> S7[⑦ Determinism]
-            S7 --> S8[⑧ Benchmark]
-            S8 --> S9[⑨ Report]
-        end
+    subgraph BE["⚙️  BACKEND  ·  FastAPI  ·  localhost:8000"]
+        direction LR
+        API["REST API\n/api/*"]
+        WSS["WebSocket\n/api/v1/pipeline\n/{run_id}/ws"]
     end
 
-    subgraph EXT["🌐  External"]
-        LLM[Google Gemini\nLLM API]
-        GIT[GitHub\nGit Clone]
+    subgraph PIPE["🔄  9-PHASE PIPELINE"]
+        direction LR
+        S1["① Ingest"] --> S2["② Parse\nAST"]
+        S2 --> S3["③ Dep\nGraph"]
+        S3 --> S4["④ Context\nOptimize"]
+        S4 --> S5["⑤ LLM\nTranslate"]
+        S5 --> S6["⑥ Validate"]
+        S6 --> S7["⑦ Determinism\nCheck"]
+        S7 --> S8["⑧ Benchmark"]
+        S8 --> S9["⑨ Report\nGenerate"]
     end
 
-    FE -->|HTTP| R1
-    FE <-->|Real-time| WS
-    PIPE -->|generate_content| LLM
-    R1 -->|clone| GIT
-    PIPE --> OUT[(📦 Artifacts\n5 ZIPs)]
+    subgraph OUT["📦  OUTPUTS"]
+        direction LR
+        O1["modernized_repo.zip\nPython source"]
+        O2["MIGRATION_GUIDE.md\nFile mapping"]
+        O3["pytest stubs\nAuto-generated"]
+        O4["validation_report.zip\nbenchmark_report.zip"]
+    end
 
-    style FE fill:#1e1b4b,color:#e0e7ff,stroke:#6366f1
-    style BE fill:#0f172a,color:#e0e7ff,stroke:#6366f1
-    style PIPE fill:#1e293b,color:#e0e7ff,stroke:#4f46e5
-    style EXT fill:#0f172a,color:#e0e7ff,stroke:#6366f1
-    style OUT fill:#1e1b4b,color:#a5b4fc,stroke:#6366f1
+    LLM["🤖 Google Gemini\nLLM API"]
+    GIT["🐙 GitHub\nGit Clone"]
+
+    FE -->|"HTTP REST"| BE
+    FE <-->|"Real-time events"| WSS
+    BE --> PIPE
+    PIPE -->|"generate_content()"| LLM
+    API -->|"git clone"| GIT
+    PIPE --> OUT
+
+    style FE   fill:#1e1b4b,color:#e0e7ff,stroke:#6366f1,stroke-width:2px
+    style BE   fill:#0f172a,color:#e0e7ff,stroke:#6366f1,stroke-width:2px
+    style PIPE fill:#1e293b,color:#e0e7ff,stroke:#4f46e5,stroke-width:2px
+    style OUT  fill:#064e3b,color:#d1fae5,stroke:#10b981,stroke-width:2px
+    style LLM  fill:#312e81,color:#e0e7ff,stroke:#818cf8,stroke-width:2px
+    style GIT  fill:#1c1917,color:#e0e7ff,stroke:#78716c,stroke-width:2px
 ```
+
+<br/>
+
+### Layer Breakdown
+
+| Layer | Technology | Responsibility |
+|-------|-----------|----------------|
+| **Frontend** | React 18 · Vite · Zustand · Framer Motion | UI, WebSocket client, state management |
+| **REST API** | FastAPI · Pydantic v2 | Upload, start, status, download endpoints |
+| **WebSocket** | FastAPI WebSocket | Real-time phase updates pushed to browser |
+| **Pipeline** | Python asyncio · NetworkX | 9-phase orchestration, dependency graph |
+| **Context Optimizer** | BFS · Token estimator | Prunes dependency context to fit token budget |
+| **LLM Client** | google-genai SDK | Calls Gemini, tracks quota, handles errors |
+| **Storage** | In-memory + JSON file | Run state, history persistence across restarts |
 
 ---
 
@@ -213,24 +236,17 @@ cd frontend && npm run dev          # → http://localhost:5173
 
 ## 🛠️ Tech Stack
 
-```mermaid
-graph LR
-    subgraph Back["Backend"]
-        B1[FastAPI] --- B2[NetworkX]
-        B2 --- B3[google-genai]
-        B3 --- B4[Pydantic v2]
-        B4 --- B5[Loguru]
-    end
-    subgraph Front["Frontend"]
-        F1[React 18] --- F2[Zustand]
-        F2 --- F3[Framer Motion]
-        F3 --- F4[TailwindCSS]
-        F4 --- F5[TypeScript]
-    end
-
-    style Back fill:#0f172a,color:#a5b4fc,stroke:#6366f1
-    style Front fill:#0f172a,color:#a5b4fc,stroke:#6366f1
-```
+| | Backend | Frontend |
+|---|---------|----------|
+| **Framework** | FastAPI + Uvicorn | React 18 + Vite |
+| **Language** | Python 3.11+ | TypeScript |
+| **State** | In-memory + JSON persistence | Zustand |
+| **LLM** | google-genai SDK (Gemini) | — |
+| **Graph** | NetworkX | — |
+| **Validation** | Pydantic v2 | — |
+| **Animations** | — | Framer Motion |
+| **Styling** | — | TailwindCSS |
+| **Logging** | Loguru | — |
 
 ---
 
